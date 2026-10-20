@@ -566,12 +566,23 @@ app.get("/healthz", (req, res) => {
 
 // Panneau de contrôle web : fichiers statiques publics, les données passent par l'API authentifiée
 app.get("/favicon.ico", (req, res) => res.status(204).end());
+const PAGE_HEADERS = {
+  "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https://static-cdn.jtvnw.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  "Referrer-Policy": "no-referrer",
+};
+// La page appelle app.js et app.css avec le numéro de version : après un déploiement, le navigateur
+// ne peut pas garder l'ancien script avec la nouvelle page (éléments introuvables)
+const INDEX_HTML = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8")
+  .replace('href="app.css"', `href="app.css?v=${APP_VERSION.id}"`)
+  .replace('src="app.js"', `src="app.js?v=${APP_VERSION.id}"`);
+app.get(["/", "/index.html"], (req, res) => {
+  res.set({ ...PAGE_HEADERS, "Cache-Control": "no-cache", "Content-Type": "text/html; charset=utf-8" }).send(INDEX_HTML);
+});
 app.use(
   express.static(path.join(__dirname, "..", "public"), {
     setHeaders(res, filePath) {
       res.set({
-        "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https://static-cdn.jtvnw.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-        "Referrer-Policy": "no-referrer",
+        ...PAGE_HEADERS,
         // Icônes : gardées 7 jours. Le reste (page, script, style) : gardé mais revérifié à chaque
         // chargement via l'ETag (réponse 304 sans contenu s'il n'a pas changé), pour qu'un déploiement
         // soit pris tout de suite.
