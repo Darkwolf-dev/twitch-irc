@@ -181,7 +181,8 @@ function isTyping() {
 function checkVersion(version) {
   if (!version) return;
   loadedVersion ??= version.id;
-  const deployed = new Date(version.deployedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const at = new Date(version.deployedAt);
+  const deployed = `${at.toLocaleDateString([], { day: "2-digit", month: "2-digit" })} à ${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   $("version").textContent = `Version ${loadedVersion}${loadedVersion === version.id ? ` · déployée le ${deployed}` : ""}`;
   if (version.id === loadedVersion) return;
   $("update-banner").hidden = false;
