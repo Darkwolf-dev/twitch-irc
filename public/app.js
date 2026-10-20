@@ -269,6 +269,7 @@ function shortDuration(iso) {
 }
 
 const NEW_LIVE_MS = 15 * 60_000; // badge « nouveau » pendant les 15 premières minutes d'un live
+const DROP_COOLDOWN_MS = 30 * 60_000; // écart minimum entre deux drops ChatDeck
 
 // Miniature du live : Twitch la régénère toutes les ~5 min. Le paramètre change une fois par tranche
 // de 5 min, donc le navigateur la redemande au plus toutes les 5 min (et seulement fiche ouverte).
@@ -442,6 +443,12 @@ function renderChannel(channel) {
   el("span", { class: "live-dur" }, ` · ${shortDuration(channel.live.startedAt)}`));
   const fresh = channel.live && Date.now() - Date.parse(channel.live.startedAt) < NEW_LIVE_MS &&
     el("span", { class: "new-badge", title: "Live commencé il y a moins de 15 minutes" }, "nouveau");
+  // Drop il y a moins de 30 min : pas de nouveau drop possible avant la fin de l'attente
+  const wait = channel.lastDrop && Math.ceil((Date.parse(channel.lastDrop) + DROP_COOLDOWN_MS - Date.now()) / 60_000);
+  const dropped = wait > 0 && el("span", {
+    class: "drop-badge",
+    title: `Drop à ${new Date(channel.lastDrop).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} : pas de nouveau drop possible avant ${wait} min`,
+  }, el("span", { class: "drop-icon" }, "🎁"), el("span", { class: "drop-wait" }, ` ${wait} min`));
 
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
@@ -458,6 +465,7 @@ function renderChannel(channel) {
     }, channel.name),
     badge,
     fresh,
+    dropped,
     sanction,
     channel.watched && el("span", { class: "seen-badge", title: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h" }, "fini"),
     el("a", {

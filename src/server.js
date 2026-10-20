@@ -514,6 +514,7 @@ function channelInfo(name) {
     favorite: favorites.has(name),
     groups: groupsOf(name),
     watched: isWatched(name),
+    lastDrop: drops.recentDropOf(name)?.at ?? null,
   };
 }
 

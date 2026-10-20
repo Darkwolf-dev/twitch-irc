@@ -7,6 +7,7 @@ const KEEP_MS = 30 * 24 * 60 * 60_000;
 const MAX_DROPS = 2000;
 const PRESENCE_TICK_MS = 60_000;
 const MIN_DAY_MINUTES = 10;
+const DROP_COOLDOWN_MS = 30 * 60_000; // écart minimum entre deux drops sur une chaîne
 // Annonce de drop ChatDeck, toujours postée depuis le compte du streamer :
 // « 🎁 Drop ChatDeck : 782 viewers présents reçoivent 3 boosters Berlu, distribués par paliers sur 3 min → … »
 const ANNOUNCE_RE = /🎁\s*Drop ChatDeck/i;
@@ -109,6 +110,18 @@ class DropTracker {
     } catch (err) {
       this.log.error(`[drops] Écriture impossible : ${err.message}`);
     }
+  }
+
+  // Drop repéré dans le chat il y a moins de 30 min : la chaîne ne peut pas redropper tout de suite
+  // (les ajouts à la main n'ont pas d'heure fiable)
+  recentDropOf(channel) {
+    const since = Date.now() - DROP_COOLDOWN_MS;
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      if (Date.parse(d.at) < since) return null;
+      if (d.channel === channel && !d.manual) return d;
+    }
+    return null;
   }
 
   presenceMinutes(channel) {

@@ -640,6 +640,9 @@ li.off .avatar { opacity: .6; }
   flex: none; padding: 0 6px; border-radius: 4px; line-height: 17px; font-size: 10.5px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em; color: #052e16; background: var(--ok);
 }
+/* Drop il y a moins de 30 min : 🎁 grisé + attente restante */
+.drop-badge { flex: none; font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.drop-icon { filter: grayscale(1); opacity: .8; }
 
 /* Miniature du live en haut de l'Aperçu */
 .live-thumb { display: block; margin-bottom: 12px; border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 16 / 9; }
@@ -656,4 +659,5 @@ li.off .avatar { opacity: .6; }
   li .head .tag.mode::before { font-size: 12px; content: "⟳"; }
   /* « nouveau » : une pastille verte au lieu du mot */
   .new-badge { width: 8px; height: 8px; padding: 0; border-radius: 50%; font-size: 0; }
+  .drop-wait { display: none; }
 }
