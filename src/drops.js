@@ -12,11 +12,11 @@ const MIN_DAY_MINUTES = 10;
 const ANNOUNCE_RE = /🎁\s*Drop ChatDeck/i;
 const DETAILS_RE = /(\d[\d\s  .]*)\s*viewers?\b.*?\b(\d+)\s*boosters?\s+([^,→]+)/i;
 // Moments du live où les drops tombent (minutes depuis le début) : tranches de 30 min,
-// l'écart minimum entre deux drops, jusqu'à 4 h
+// l'écart minimum entre deux drops, jusqu'à 8 h
 const hm = (m) => (m % 60 ? `${Math.floor(m / 60)} h 30` : `${m / 60} h`);
 const MOMENTS = [
-  ...Array.from({ length: 8 }, (_, i) => ({ label: `${hm(i * 30)} – ${hm((i + 1) * 30)}`, max: (i + 1) * 30 })),
-  { label: "> 4 h", max: Infinity },
+  ...Array.from({ length: 16 }, (_, i) => ({ label: `${hm(i * 30)} – ${hm((i + 1) * 30)}`, max: (i + 1) * 30 })),
+  { label: "> 8 h", max: Infinity },
 ];
 
 const day = (t) => new Date(t).toISOString().slice(0, 10);

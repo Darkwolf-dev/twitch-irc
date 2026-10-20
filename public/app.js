@@ -1260,6 +1260,13 @@ async function openDrops() {
   }
 }
 
+// Tranches de 30 min jusqu'à 8 h, comme le graphique « Moment du live »
+{
+  const hm = (m) => (m % 60 ? `${Math.floor(m / 60)} h 30` : `${m / 60} h`);
+  const options = Array.from({ length: 16 }, (_, i) => el("option", { value: String(i * 30 + 15) }, `${hm(i * 30)} – ${hm((i + 1) * 30)}`));
+  $("drops-manual-moment").replaceChildren(...options, el("option", { value: "500" }, "> 8 h"));
+}
+
 $("drops-manual").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
