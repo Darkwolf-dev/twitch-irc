@@ -322,6 +322,17 @@ button.pill.state-off { border-color: currentColor; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
+/* --- Nouvelle version et numéro de version --- */
+.update-banner {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px;
+  padding: max(8px, env(safe-area-inset-top)) 16px 8px;
+  background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; text-align: center;
+}
+.update-banner[hidden] { display: none; }
+.update-banner button { background: #fff; color: var(--accent); }
+.app-version { margin-top: 24px; text-align: center; font-variant-numeric: tabular-nums; }
+
 /* --- Bouton « remonter en haut » --- */
 .to-top {
   position: fixed;

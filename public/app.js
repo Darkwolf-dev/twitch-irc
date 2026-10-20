@@ -167,9 +167,31 @@ async function handleOAuthReturn() {
   return true;
 }
 
+// --- Nouvelle version déployée : rechargement automatique ---
+
+let loadedVersion = null;
+
+// On ne recharge pas sous les doigts de l'utilisateur : saisie en cours = on attend
+function isTyping() {
+  const a = document.activeElement;
+  return Boolean(a && (a.tagName === "TEXTAREA" || a.tagName === "SELECT" ||
+    (a.tagName === "INPUT" && !["checkbox", "radio", "button", "submit"].includes(a.type))));
+}
+
+function checkVersion(version) {
+  if (!version) return;
+  loadedVersion ??= version.id;
+  const deployed = new Date(version.deployedAt).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  $("version").textContent = `Version ${loadedVersion}${loadedVersion === version.id ? ` · déployée le ${deployed}` : ""}`;
+  if (version.id === loadedVersion) return;
+  $("update-banner").hidden = false;
+  if (!isTyping()) location.reload();
+}
+
 async function refresh() {
   try {
     lastStatus = await api("/status");
+    checkVersion(lastStatus.version);
     render();
     if ($("journal").open) await refreshEvents();
   } catch (err) {
@@ -1572,6 +1594,8 @@ async function boot() {
 boot();
 
 // Bouton « remonter en haut » : visible dès qu'on a un peu défilé
+$("update-now").addEventListener("click", () => location.reload());
+
 const toTop = $("to-top");
 const updateToTop = () => toTop.classList.toggle("visible", window.scrollY > 300);
 window.addEventListener("scroll", updateToTop, { passive: true });

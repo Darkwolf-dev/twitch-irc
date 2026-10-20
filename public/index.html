@@ -21,6 +21,10 @@
   <span class="spinner" aria-hidden="true"></span>
   Connexion au serveur perdue (redémarrage ou mise à jour ?) · reconnexion automatique…
 </div>
+<div id="update-banner" class="update-banner" role="status" hidden>
+  Nouvelle version disponible · rechargement dès que tu as fini de taper
+  <button type="button" id="update-now" class="small">Recharger</button>
+</div>
 <main>
   <header>
     <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>IRC Manager</h1>
@@ -274,6 +278,8 @@
       </div>
       <ol id="events"></ol>
     </details>
+
+    <footer id="version" class="hint app-version"></footer>
 
   </section>
 </main>

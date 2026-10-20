@@ -36,6 +36,25 @@ if (API_SECRET.length < 32) {
 }
 
 const maxChannels = Number(MAX_CHANNELS);
+
+// Version de l'appli : empreinte du code (src/ et public/), pour que le panneau
+// se recharge tout seul après un déploiement. La date est celle du fichier le plus récent.
+const APP_VERSION = (() => {
+  const root = path.join(__dirname, "..");
+  const hash = crypto.createHash("sha256");
+  let deployedAt = 0;
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(file); continue; }
+      hash.update(path.relative(root, file)).update(fs.readFileSync(file));
+      deployedAt = Math.max(deployedAt, fs.statSync(file).mtimeMs);
+    }
+  };
+  walk(path.join(root, "src"));
+  walk(path.join(root, "public"));
+  return { id: hash.digest("hex").slice(0, 7), deployedAt: new Date(deployedAt).toISOString() };
+})();
 const CHANNELS_FILE = path.join(DATA_DIR, "channels.json");
 
 const MAX_SAVED = 500;
@@ -493,6 +512,7 @@ function fullStatus() {
   status.irc.paused = settings.ircPaused;
   status.sanctions = { total: sanctions.length, active: sanctions.filter((x) => !x.cleared && (x.type === "ban" || Date.parse(x.until) > Date.now())).length };
   const sleepers = dormantReport();
+  status.version = APP_VERSION;
   status.dormant = {
     count: sleepers.length,
     days: settings.dormantDays,
@@ -1257,7 +1277,7 @@ const previous = events.items.at(-1);
 if (previous && !(previous.source === "app" && /^Arrêt/.test(previous.message))) {
   log.warn(`[app] Le serveur ne s'était pas arrêté proprement (dernier événement : ${new Date(previous.at).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })})`);
 }
-log.log("[app] Démarrage du serveur");
+log.log(`[app] Démarrage du serveur (version ${APP_VERSION.id})`);
 
 // Plantage inattendu : on garde la raison dans le journal avant de quitter
 // (Docker relance le conteneur automatiquement)
