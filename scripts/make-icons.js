@@ -1,19 +1,18 @@
 "use strict";
 
-// Génère les icônes de Twitch Deck (PNG) sans dépendance : fond violet en dégradé, trois cartes
-// empilées (le « deck »), la première avec un point rouge « live » et deux lignes de texte.
-// Même dessin que public/icons/icon.svg. Usage : node scripts/make-icons.js
+// Génère les icônes de Twitch Deck (PNG) sans dépendance : fond violet Twitch, trois cartes empilées
+// (le « deck »), celle de devant en mini lecteur vidéo avec badge « LIVE ».
+// Même dessin que public/icons/icon.svg (coordonnées sur 100). Usage : node scripts/make-icons.js
 
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
 const OUT = path.join(__dirname, "..", "public", "icons");
-const TOP = [139, 68, 247];    // #8b44f7
-const BOTTOM = [91, 31, 191];  // #5b1fbf
+const BG = [145, 70, 255];     // #9146ff
 const WHITE = [255, 255, 255];
+const SCREEN = [24, 24, 27];   // #18181b
 const RED = [233, 25, 22];     // #e91916
-const INK = [119, 44, 232];    // #772ce8
 const SOFT = [205, 186, 248];  // #cdbaf8
 const SS = 4;                  // suréchantillonnage pour l'anticrénelage
 
@@ -24,25 +23,56 @@ function inRoundRect(x, y, x0, y0, x1, y1, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
+// Point dans un polygone convexe (sommets dans l'ordre)
+function inConvex(x, y, pts) {
+  let sign = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+    const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    if (c !== 0) {
+      if (sign && Math.sign(c) !== sign) return false;
+      sign = Math.sign(c);
+    }
+  }
+  return true;
+}
+
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+// Lettres « LIVE » du badge, en traits (coordonnées sur 100)
+const LIVE_RECTS = [
+  [27.6, 41.7, 28.4, 45.3], [27.6, 44.5, 30.0, 45.3],                          // L
+  [30.8, 41.7, 31.6, 45.3],                                                    // I
+  [36.9, 41.7, 37.7, 45.3], [36.9, 41.7, 39.0, 42.4], [36.9, 43.15, 38.6, 43.85], [36.9, 44.6, 39.0, 45.3], // E
+];
+const LIVE_POLYS = [
+  [[32.4, 41.7], [33.3, 41.7], [34.6, 45.3], [33.7, 45.3]],                    // V, trait gauche
+  [[35.0, 41.7], [35.9, 41.7], [34.6, 45.3], [33.7, 45.3]],                    // V, trait droit
+];
 
 // Couleur d'un point en coordonnées 0..1. maskable : fond plein bord à bord (Android découpe lui-même)
 function shade(u, v, maskable) {
   const inside = maskable || inRoundRect(u, v, 0, 0, 1, 1, 0.22);
   if (!inside) return null;
   const k = maskable ? 0.8 : 1; // zone sûre des icônes « maskable »
-  const m = (a) => 0.5 + (a - 0.5) * k;
-  const rect = (x0, y0, x1, y1, r) => inRoundRect(u, v, m(x0), m(y0), m(x1), m(y1), r * k);
+  // Point courant ramené dans le repère du dessin (sur 100)
+  const x = (0.5 + (u - 0.5) / k) * 100, y = (0.5 + (v - 0.5) / k) * 100;
+  const rect = (x0, y0, x1, y1, r) => inRoundRect(x, y, x0, y0, x1, y1, r);
 
-  let c = mix(TOP, BOTTOM, v);
-  if (rect(0.31, 0.17, 0.81, 0.59, 0.07)) c = mix(c, WHITE, 0.32); // carte du fond
-  if (rect(0.25, 0.25, 0.75, 0.67, 0.07)) c = mix(c, WHITE, 0.6);  // carte du milieu
-  if (rect(0.19, 0.33, 0.69, 0.79, 0.07)) {                        // carte de devant
+  let c = BG;
+  if (rect(31, 17, 81, 59, 7)) c = mix(c, WHITE, 0.3);    // carte du fond
+  if (rect(25, 25, 75, 67, 7)) c = mix(c, WHITE, 0.55);   // carte du milieu
+  if (rect(19, 33, 69, 79, 7)) {                          // carte de devant : mini lecteur
     c = WHITE;
-    if ((u - m(0.3)) ** 2 + (v - m(0.47)) ** 2 <= (0.05 * k) ** 2) c = RED;
-    if (rect(0.38, 0.44, 0.6, 0.5, 0.03)) c = INK;
-    if (rect(0.27, 0.6, 0.6, 0.66, 0.03)) c = SOFT;
-    if (rect(0.27, 0.69, 0.5, 0.73, 0.02)) c = SOFT;
+    if (rect(24, 38, 64, 63, 3)) c = SCREEN;
+    if (inConvex(x, y, [[40, 45], [49, 50.5], [40, 56]])) c = WHITE; // lecture
+    if (rect(26.5, 40.5, 39.5, 46.5, 1.5)) {
+      c = RED;
+      if (LIVE_RECTS.some(([a, b, cc, d]) => x >= a && x <= cc && y >= b && y <= d) ||
+          LIVE_POLYS.some((p) => inConvex(x, y, p))) c = WHITE;
+    }
+    if (rect(24, 67, 50, 71.5, 2.25)) c = BG;
+    if (rect(24, 73.5, 41, 76.5, 1.5)) c = SOFT;
   }
   return c;
 }
