@@ -261,6 +261,20 @@ function formatLastLive(iso) {
   return `${date} à ${time} · il y a ${days} j`;
 }
 
+// « 45 min », « 2h10 » : durée compacte pour la liste
+function shortDuration(iso) {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 60000));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+}
+
+const NEW_LIVE_MS = 15 * 60_000; // badge « nouveau » pendant les 15 premières minutes d'un live
+
+// Miniature du live : Twitch la régénère toutes les ~5 min. Le paramètre change une fois par tranche
+// de 5 min, donc le navigateur la redemande au plus toutes les 5 min (et seulement fiche ouverte).
+function thumbnailUrl(url) {
+  return `${url}?t=${Math.floor(Date.now() / 300_000)}`;
+}
+
 function formatDuration(iso) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 60000));
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
@@ -422,7 +436,10 @@ function renderChannel(channel) {
   const badge = channel.live && el("span", {
     class: "live-badge",
     title: `En live depuis ${formatDuration(channel.live.startedAt)}`,
-  }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers));
+  }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers),
+  el("span", { class: "live-dur" }, ` · ${shortDuration(channel.live.startedAt)}`));
+  const fresh = channel.live && Date.now() - Date.parse(channel.live.startedAt) < NEW_LIVE_MS &&
+    el("span", { class: "new-badge", title: "Live commencé il y a moins de 15 minutes" }, "nouveau");
 
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
@@ -438,6 +455,7 @@ function renderChannel(channel) {
       onclick: () => openChannel(channel.name),
     }, channel.name),
     badge,
+    fresh,
     sanction,
     channel.watched && el("span", { class: "seen-badge", title: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h" }, "fini"),
     el("a", {
@@ -522,8 +540,13 @@ function renderChannel(channel) {
 
   const classes = [channel.enabled ? "on" : "off", channel.live ? "live" : "idle", channel.watched && "watched",
     dialog.name === channel.name && "selected"];
-  return el("li", { class: classes.filter(Boolean).join(" ") },
-    star, seen, toggle, avatar(channel), name, state, remove);
+  return el("li", {
+    class: classes.filter(Boolean).join(" "),
+    onclick: (e) => {
+      if (e.target.closest("button, a, input, label") || getSelection().toString()) return;
+      openChannel(channel.name);
+    },
+  }, star, seen, toggle, avatar(channel), name, state, remove);
 }
 
 // Pastille à l'initiale de la chaîne, teinte stable dérivée du nom, anneau rouge pendant le live
@@ -803,6 +826,13 @@ function renderChannelSettings(channel) {
   const last = channel.lastMessage;
   const tile = (value, label) => el("div", { class: "tile" },
     el("span", { class: "tile-value" }, value), el("span", { class: "tile-label" }, label));
+  const thumb = channel.live?.thumbnail && el("a", {
+    class: "live-thumb",
+    href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: `Ouvrir ${channel.name} sur Twitch`,
+  }, el("img", { src: thumbnailUrl(channel.live.thumbnail), alt: `Aperçu du live de ${channel.name}`, width: "440", height: "248" }));
   const overview = channel.live
     ? el("div", { class: "tiles" },
       tile(viewers.format(channel.live.viewers), "spectateurs"),
@@ -812,7 +842,8 @@ function renderChannelSettings(channel) {
       ? `Hors live · dernier live ${formatLastLive(channel.lastLive)}`
       : "Hors live");
 
-  box.replaceChildren(
+  box.replaceChildren(...[
+    thumb,
     overview,
     el("div", { class: "field" },
       el("span", { class: "field-label" }, "Activée"),
@@ -867,7 +898,8 @@ function renderChannelSettings(channel) {
             closeChannel();
           }
         },
-      }, "Retirer de la liste")));
+      }, "Retirer de la liste")),
+  ].filter(Boolean));
 }
 
 function renderGroupTabs() {
