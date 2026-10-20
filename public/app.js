@@ -466,39 +466,39 @@ function renderChannel(channel) {
     message = el("span", { class: "last" }, "Aucun message reçu");
   }
 
-  // Ligne 4 : mode et groupes. Sur ordinateur, modifiables directement ici ;
-  // sur téléphone, simples étiquettes (les modifications se font dans la fiche).
-  const tags = el("span", { class: "tags" },
-    el("button", {
-      class: `tag mode${channel.liveOnly ? " live-only" : ""}`,
-      disabled: isBusy,
-      "aria-pressed": String(channel.liveOnly),
-      title: channel.liveOnly
-        ? "Rejoint seulement pendant le live (clic : rejoindre tout le temps)"
-        : "Rejoint tout le temps (clic : seulement pendant le live)",
-      onclick: () => act("/channels/mode", [channel.name], { liveOnly: !channel.liveOnly }),
-    }, channel.liveOnly ? "◉ si live" : "◉ toujours"),
-    ...channel.groups.map((group) => el("button", {
-      class: "tag group",
-      disabled: isBusy,
-      title: `Retirer ${channel.name} du groupe « ${group} »`,
-      onclick: () => {
-        if (confirm(`Retirer ${channel.name} du groupe « ${group} » ?`)) {
-          act("/channels/group", [channel.name], { group, member: false });
-        }
-      },
-    }, group)),
-    el("button", {
-      class: "tag add desktop-only",
-      disabled: isBusy,
-      title: `Ajouter ${channel.name} à un groupe`,
-      onclick: () => {
-        const existing = lastStatus.groups.map((g) => g.name).filter((g) => !channel.groups.includes(g));
-        const hint = existing.length ? `Groupes existants : ${existing.join(", ")}\n` : "";
-        const group = prompt(`${hint}Nom du groupe pour ${channel.name} :`, existing[0] ?? "");
-        if (group && group.trim()) act("/channels/group", [channel.name], { group: group.trim(), member: true });
-      },
-    }, "+ groupe"));
+  // Ligne 4 : seulement les exceptions — mode « toujours » (24/7) et groupes. Le mode « si live »,
+  // le plus courant, n'est plus affiché. Sur ordinateur, modifiables ici ; sur téléphone, dans la fiche.
+  const modeTag = !channel.liveOnly && el("button", {
+    class: "tag mode",
+    disabled: isBusy,
+    title: "Rejoint le chat tout le temps (clic : seulement pendant le live)",
+    onclick: () => act("/channels/mode", [channel.name], { liveOnly: true }),
+  }, "24/7");
+  const groupTags = channel.groups.map((group) => el("button", {
+    class: "tag group",
+    disabled: isBusy,
+    title: `Retirer ${channel.name} du groupe « ${group} »`,
+    onclick: () => {
+      if (confirm(`Retirer ${channel.name} du groupe « ${group} » ?`)) {
+        act("/channels/group", [channel.name], { group, member: false });
+      }
+    },
+  }, group));
+  const tags = (modeTag || groupTags.length > 0) && el("span", { class: "tags" }, modeTag, ...groupTags);
+
+  // « + groupe » : à côté du nom, visible au survol (ordinateur seulement)
+  head.append(el("button", {
+    class: "tag add desktop-only",
+    disabled: isBusy,
+    title: `Ajouter ${channel.name} à un groupe`,
+    onclick: () => {
+      const existing = lastStatus.groups.map((g) => g.name).filter((g) => !channel.groups.includes(g));
+      const hint = existing.length ? `Groupes existants : ${existing.join(", ")}
+` : "";
+      const group = prompt(`${hint}Nom du groupe pour ${channel.name} :`, existing[0] ?? "");
+      if (group && group.trim()) act("/channels/group", [channel.name], { group: group.trim(), member: true });
+    },
+  }, "+ groupe"));
 
   const name = el("div", { class: "name" }, head, liveLine, lastLiveLine, message, tags);
 
