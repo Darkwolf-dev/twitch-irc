@@ -101,6 +101,7 @@ function logout(message) {
   $("account").hidden = true;
   $("account-menu").hidden = true;
   $("open-settings").hidden = true;
+  $("open-drops").hidden = true;
   $("profile-box").hidden = true;
   if ($("settings-dialog").open) $("settings-dialog").close();
   showLogin(message);
@@ -366,6 +367,9 @@ function render() {
   if (dialog.name) renderDialogHeader();
   renderAddButton();
   renderTokenBanner(lastStatus.token);
+  const pendingDrops = lastStatus.drops?.pending ?? 0;
+  $("drops-badge").hidden = !pendingDrops;
+  $("drops-badge").textContent = String(pendingDrops);
 
   const shown = visibleChannels();
   const scope = scopeLabel();
@@ -1205,6 +1209,81 @@ function formatSeconds(s) {
 
 
 
+// --- Radar à drops ChatDeck ---
+
+const shortDate = (iso) => new Date(iso).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const liveMoment = (minute) => minute === null ? "hors live"
+  : minute < 60 ? `${minute} min de live` : `${Math.floor(minute / 60)} h ${String(minute % 60).padStart(2, "0")} de live`;
+
+function dropItem(c, actions) {
+  return el("li", {},
+    el("div", { class: "drops-msg" },
+      el("strong", {}, c.user), " ", c.text,
+      el("span", { class: "hint" }, `#${c.channel} · ${shortDate(c.at)} · ${liveMoment(c.minute)}${c.auto ? " · classé d'office" : ""}`)),
+    el("div", { class: "drops-actions" }, ...actions));
+}
+
+async function dropVerdict(id, drop) {
+  try {
+    await api("/drops/verdict", { id, drop });
+    await openDrops();
+    refresh();
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function momentBars(c) {
+  if (!c.drops) return "–";
+  const max = Math.max(1, ...c.moments.map((m) => m.count));
+  const bars = c.moments.map((m) => {
+    const bar = el("span", { class: m.count ? "" : "zero" });
+    bar.style.height = `${Math.max(2, Math.round((m.count / max) * 22))}px`;
+    return bar;
+  });
+  return el("div", { class: "moments" }, ...bars);
+}
+
+async function openDrops() {
+  if (!$("drops-dialog").open) {
+    $("drops-pending").replaceChildren(el("li", { class: "hint" }, "Chargement…"));
+    $("drops-dialog").showModal();
+    document.querySelector("#drops-dialog .dlg").focus();
+  }
+  try {
+    const d = await api("/drops");
+    $("drops-pending-count").textContent = d.pending.length ? `(${d.pending.length})` : "";
+    $("drops-pending").replaceChildren(...(d.pending.length ? d.pending.map((c) => dropItem(c, [
+      el("button", { type: "button", class: "small", onclick: () => dropVerdict(c.id, true) }, "✓ Drop"),
+      el("button", { type: "button", class: "ghost small", onclick: () => dropVerdict(c.id, false) }, "✗ Non"),
+    ])) : [el("li", { class: "hint" }, "Rien à valider pour l'instant.")]));
+
+    const ranked = d.channels.filter((c) => c.drops || c.presenceHours);
+    $("drops-ranking").replaceChildren(...(ranked.length ? ranked.map((c) => el("tr", {},
+      el("td", {}, el("strong", {}, c.channel)),
+      el("td", {}, String(c.drops)),
+      el("td", {}, `${c.presenceHours} h`),
+      el("td", {}, c.perHour === null ? "–" : String(c.perHour)),
+      el("td", {
+        title: c.moments.map((m) => `${m.label} : ${m.count}`).join("\n")
+          + (c.medianMinute !== null ? `\nMoment médian : ${liveMoment(c.medianMinute)}` : ""),
+      }, momentBars(c)),
+      el("td", {}, c.lastAt ? shortDate(c.lastAt) : "–")))
+      : [el("tr", {}, el("td", { colspan: "6", class: "hint" }, "Pas encore de données : le radar se remplit pendant que Twitch Deck est dans les chats en live."))]));
+
+    $("drops-recent").replaceChildren(...(d.recent.length ? d.recent.map((c) => dropItem(c, [
+      el("span", { class: "hint" }, c.drop ? "✓ drop" : "✗ non"),
+      el("button", { type: "button", class: "ghost small", title: "Remettre à valider", onclick: () => dropVerdict(c.id, null) }, "↺"),
+    ])) : [el("li", { class: "hint" }, "Aucun message validé.")]));
+  } catch (err) {
+    if (err.message !== "auth") $("drops-pending").replaceChildren(el("li", { class: "error" }, err.message));
+  }
+}
+
+$("open-drops").addEventListener("click", openDrops);
+$("drops-close").addEventListener("click", () => $("drops-dialog").close());
+$("drops-dialog").addEventListener("click", (e) => { if (e.target === $("drops-dialog")) $("drops-dialog").close(); });
+
 // --- Compte Twitch de l'IRC à reconnecter (token refusé) ---
 
 function renderTokenBanner(token) {
@@ -1536,6 +1615,7 @@ async function loadMe() {
     }
     $("account").hidden = false;
     $("open-settings").hidden = false;
+    $("open-drops").hidden = false;
     $("profile-box").hidden = false;
   } catch (err) {
     $("account").hidden = true;

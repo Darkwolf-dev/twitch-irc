@@ -10,6 +10,7 @@ Téléphone / autre PC ──Tailscale (HTTPS)──► API Express 127.0.0.1:30
 
 - **État voulu → état réel** : l'API modifie seulement la liste des chaînes voulues (persistée). Une boucle de réconciliation envoie les `JOIN`/`PART` nécessaires, à 15 JOIN / 10 s maximum (la limite Twitch est de 20).
 - **Robustesse** : reconnexion automatique avec délai croissant, gestion de `RECONNECT`, PING de keepalive, nouvel essai des JOIN échoués (canal suspendu, banni, sans réponse), puis retour automatique sur toutes les chaînes après une coupure.
+- **Radar à drops** (bouton 🎁) : repère les messages qui parlent de ChatDeck, de booster ou de drop, te les fait valider, puis classe les chaînes par drops par heure de présence pendant le live. Les chaînes qui droppent le plus passent en premier quand le plafond de chats est atteint. Données dans `data/drops.json`, 30 jours.
 - **Token** : validé toutes les heures (exigence Twitch) et renouvelé automatiquement grâce au refresh token. S'il est refusé, le panneau affiche un bandeau rouge avec un bouton **Reconnecter** (code à valider sur twitch.tv/activate, sans redémarrage) et une alerte part sur Discord.
 
 ## Installation
@@ -48,7 +49,7 @@ npm start
   - Discord : mentions, et alerte quand un favori passe en live, avec ou sans @.
 - **Appli mobile** : le panneau s'installe sur l'écran d'accueil (manifeste et service worker sans cache). Les icônes se régénèrent avec `node scripts/make-icons.js`.
 
-Fichiers dans `data/` : `channels.json`, `settings.json`, `stats.json`, `token.json`, `sessions.json`, `backups/` et `journal/`.
+Fichiers dans `data/` : `channels.json`, `settings.json`, `stats.json`, `drops.json`, `token.json`, `sessions.json`, `backups/` et `journal/`.
 
 ## Connexion au panneau
 

@@ -139,6 +139,25 @@ label.check input { width: 18px; height: 18px; }
 .dormant-list li:first-child { border-top: 0; }
 .dormant-list label.check { margin: 0; color: var(--text); flex: 1; min-width: 0; }
 .dormant-list .hint { font-size: 12.5px; }
+
+/* --- Radar à drops --- */
+#drops-dialog { width: min(760px, calc(100vw - 32px)); }
+.drops-body { overflow-y: auto; }
+.drops-body h3 { margin: 16px 0 4px; font-size: 15px; }
+.drops-body section:first-child h3 { margin-top: 0; }
+.drops-list { list-style: none; margin: 8px 0; padding: 0; }
+.drops-list li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.drops-list li:first-child { border-top: 0; }
+.drops-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.drops-msg .hint { display: block; font-size: 12px; }
+.drops-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.drops-table-wrap { overflow-x: auto; }
+.drops-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.drops-table th, .drops-table td { padding: 6px 8px; text-align: left; border-top: 1px solid var(--border); white-space: nowrap; }
+.drops-table th { color: var(--muted); font-weight: 600; font-size: 12px; border-top: 0; }
+.moments { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
+.moments span { width: 10px; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }
+.moments span.zero { background: var(--track); }
 button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 
 /* --- Profils --- */
@@ -561,7 +580,7 @@ button.star.big.is-fav { color: var(--star); border-color: var(--star); }
   .tiles { grid-template-columns: repeat(2, 1fr); }
 
   /* Fiche, réglages et nettoyage en plein écran */
-  #settings-dialog, #dormant-dialog { width: 100vw; }
+  #settings-dialog, #dormant-dialog, #drops-dialog { width: 100vw; }
   dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
   .dlg { height: 100%; max-height: none; padding-bottom: env(safe-area-inset-bottom); }
   .dlg-head { padding-top: max(14px, env(safe-area-inset-top)); }

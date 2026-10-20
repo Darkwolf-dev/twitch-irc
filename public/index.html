@@ -46,6 +46,10 @@
     <div class="who">
       <button type="button" id="irc" class="pill" hidden></button>
       <span class="badge-wrap">
+        <button type="button" id="open-drops" class="icon-btn" aria-label="Radar à drops" title="Radar à drops" hidden>🎁</button>
+        <span id="drops-badge" class="count-badge" hidden></span>
+      </span>
+      <span class="badge-wrap">
         <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
         <span id="dormant-badge" class="count-badge" hidden></span>
       </span>
@@ -326,6 +330,37 @@
         <button type="button" id="dormant-disable" class="ghost">Seulement désactiver</button>
       </div>
       <p id="dormant-status" class="hint" role="status"></p>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="drops-dialog" aria-labelledby="drops-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="drops-title">🎁 Radar à drops</h2>
+        <p>Les chaînes qui droppent le plus passent en premier quand le plafond de chats est atteint</p>
+      </div>
+      <button type="button" id="drops-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tab-panel drops-body">
+      <section>
+        <h3>À valider <span id="drops-pending-count" class="hint"></span></h3>
+        <p class="hint">Messages qui parlent de ChatDeck, de booster ou de drop. Dis si c'est une vraie annonce : après 2 drops validés venant de la même personne sur une chaîne, ses annonces suivantes sont validées d'office.</p>
+        <ul id="drops-pending" class="drops-list"></ul>
+      </section>
+      <section>
+        <h3>Classement · 30 jours</h3>
+        <p class="hint">Présence = temps passé dans le chat pendant le live. Seules les chaînes rejointes peuvent avoir des drops repérés.</p>
+        <div class="drops-table-wrap"><table class="drops-table">
+          <thead><tr><th>Chaîne</th><th>Drops</th><th>Présence</th><th>Drops / h</th><th>Moment du live</th><th>Dernier</th></tr></thead>
+          <tbody id="drops-ranking"></tbody>
+        </table></div>
+      </section>
+      <section>
+        <h3>Derniers validés</h3>
+        <ul id="drops-recent" class="drops-list"></ul>
+      </section>
     </div>
   </div>
 </dialog>

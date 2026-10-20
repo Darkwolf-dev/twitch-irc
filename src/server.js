@@ -8,6 +8,7 @@ const path = require("path");
 const express = require("express");
 const { TwitchIrc } = require("./irc");
 const { TokenManager, DATA_DIR } = require("./token");
+const { DropTracker } = require("./drops");
 const { LiveMonitor } = require("./live");
 const { EventLog, summarize } = require("./events");
 const { SessionStore, readCookie, cookieHeader, COOKIE, SESSION_TTL_MS } = require("./sessions");
@@ -186,6 +187,7 @@ const irc = new TwitchIrc({
   onSanction: (sanction) => recordSanction(sanction),
   onMessage: (message) => {
     stats.countMessage(message.channel);
+    drops.handle(message, irc.username);
     notifier.handle(message);
   },
   log,
@@ -202,6 +204,13 @@ const live = new LiveMonitor({
     if (favorites.has(channel)) notifier.liveAlert(channel, info, settings.discordLiveAlerts);
   },
   onAuthFailure: () => tokens.invalidate(),
+  log,
+});
+
+const drops = new DropTracker({
+  dataDir: DATA_DIR,
+  getLive: () => live.live,
+  isJoined: (channel) => irc.joined.has(channel),
   log,
 });
 
@@ -361,7 +370,7 @@ function saveSettings() {
 
 // Calcule les chaînes à rejoindre, dans la limite du plafond de chats simultanés :
 // d'abord les chaînes « toujours » (favoris en tête), puis celles « si live »
-// actuellement en live (favoris, puis plus gros lives).
+// actuellement en live (favoris, puis celles qui droppent le plus, puis plus gros lives).
 function syncDesired() {
   // Une chaîne marquée « vu » n'est plus rejointe jusqu'à la remise à zéro de 2 h
   const candidates = [...enabled].filter((n) => !isWatched(n));
@@ -369,10 +378,13 @@ function syncDesired() {
     .filter((n) => !liveOnly.has(n))
     .sort((a, b) => (favorites.has(b) - favorites.has(a)) || a.localeCompare(b));
   const open = scheduleOpen();
+  // Puis les chaînes qui droppent le plus (radar à drops), puis les plus gros lives
+  const dropScores = drops.scores();
   const whenLive = candidates
     .filter((n) => open && liveOnly.has(n) && live.isActive(n))
     .sort((a, b) =>
       (favorites.has(b) - favorites.has(a)) ||
+      ((dropScores.get(b) ?? 0) - (dropScores.get(a) ?? 0)) ||
       ((live.info(b)?.viewers ?? 0) - (live.info(a)?.viewers ?? 0)) ||
       a.localeCompare(b));
   irc.setDesired(new Set([...always, ...whenLive].slice(0, settings.maxConcurrent)));
@@ -528,6 +540,7 @@ function fullStatus() {
   };
   status.live = live.status();
   status.token = tokens.status();
+  status.drops = { pending: drops.pendingCount() };
 
   const sizes = new Map();
   for (const set of groups.values()) for (const g of set) sizes.set(g, (sizes.get(g) ?? 0) + 1);
@@ -1102,6 +1115,23 @@ app.post("/auth/device", async (req, res) => {
   }
 });
 
+// --- Radar à drops ChatDeck ---
+
+app.get("/drops", (req, res) => {
+  res.json(drops.report());
+});
+
+// { "id": "<12 caractères>", "drop": true | false | null }
+app.post("/drops/verdict", (req, res) => {
+  const { id, drop } = req.body ?? {};
+  if (typeof id !== "string" || !/^[0-9a-f]{12}$/.test(id) || ![true, false, null].includes(drop)) {
+    return res.status(400).json({ error: `Fournir "id" et "drop" (true, false ou null)` });
+  }
+  if (!drops.setVerdict(id, drop)) return res.status(404).json({ error: "Message introuvable" });
+  syncDesired();
+  res.json({ ok: true });
+});
+
 // --- Pause de l'IRC : { "paused": true } quitte tous les chats et coupe la connexion ---
 
 app.post("/irc/pause", (req, res) => {
@@ -1327,6 +1357,7 @@ const server = app.listen(Number(PORT), HOST, () => {
   else irc.start();
   live.start();
   stats.start();
+  drops.start();
   // Chaînes endormies : suivi de toutes les chaînes, puis vérification des VOD (1 min après, puis chaque jour)
   dormant.track([...saved]);
   setTimeout(() => dormant.checkVods([...saved], settings.dormantDays), 60_000).unref();
@@ -1381,6 +1412,8 @@ function shutdown(signal) {
   live.stop();
   stats.stop();
   stats.save();
+  drops.stop();
+  drops.save();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref();
 }
