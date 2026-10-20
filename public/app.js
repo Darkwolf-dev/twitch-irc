@@ -1244,8 +1244,8 @@ async function openDrops() {
       el("td", {}, el("strong", {}, c.channel)),
       el("td", {}, String(c.drops)),
       el("td", {}, String(c.boosters)),
-      el("td", {}, `${c.presenceHours} h`),
-      el("td", {}, c.perHour === null ? "–" : String(c.perHour)),
+      el("td", {}, `${c.presenceHours} h · ${c.presenceDays} j`),
+      el("td", {}, c.perDay === null ? "–" : String(c.perDay).replace(".", ",")),
       el("td", {
         title: c.moments.map((m) => `${m.label} : ${m.count}`).join("\n")
           + (c.medianMinute !== null ? `\nMoment médian : ${liveMoment(c.medianMinute)}` : ""),

@@ -6,6 +6,7 @@ const path = require("path");
 const KEEP_MS = 30 * 24 * 60 * 60_000;
 const MAX_DROPS = 2000;
 const PRESENCE_TICK_MS = 60_000;
+const MIN_DAY_MINUTES = 10;
 // Annonce de drop ChatDeck, toujours postée depuis le compte du streamer :
 // « 🎁 Drop ChatDeck : 782 viewers présents reçoivent 3 boosters Berlu, distribués par paliers sur 3 min → … »
 const ANNOUNCE_RE = /🎁\s*Drop ChatDeck/i;
@@ -24,7 +25,7 @@ const day = (t) => new Date(t).toISOString().slice(0, 10);
 const boostersOf = (d) => d.boosters ?? 1;
 
 // Radar à drops : repère les annonces dans les chats rejoints, puis classe les chaînes
-// selon les boosters gagnés par heure de présence pendant le live.
+// selon les boosters gagnés par jour de présence pendant le live.
 class DropTracker {
   constructor({ dataDir, getLive, isJoined, log }) {
     this.file = path.join(dataDir, "drops.json");
@@ -108,19 +109,25 @@ class DropTracker {
     return Object.values(this.presence[channel] ?? {}).reduce((a, b) => a + b, 0);
   }
 
-  // Chaîne -> boosters par heure de présence, lissé (+2 h) pour qu'un seul drop sur 10 min de présence
+  // Jours où on était dans le chat pendant le live (un jour compte dès 10 min de présence)
+  presenceDays(channel) {
+    return Object.values(this.presence[channel] ?? {}).filter((m) => m >= MIN_DAY_MINUTES).length;
+  }
+
+  // Chaîne -> boosters par jour de présence, lissé (+1 jour) pour qu'un seul drop vu le premier jour
   // ne passe pas en tête. Calculé en une passe : sert au tri des chaînes à rejoindre.
   scores() {
     const boosters = new Map();
     for (const d of this.drops) boosters.set(d.channel, (boosters.get(d.channel) ?? 0) + boostersOf(d));
     const scores = new Map();
-    for (const [channel, count] of boosters) scores.set(channel, count / (this.presenceMinutes(channel) / 60 + 2));
+    for (const [channel, count] of boosters) scores.set(channel, count / (this.presenceDays(channel) + 1));
     return scores;
   }
 
   channelReport(channel) {
     const drops = this.drops.filter((d) => d.channel === channel);
     const minutes = this.presenceMinutes(channel);
+    const days = this.presenceDays(channel);
     const boosters = drops.reduce((n, d) => n + boostersOf(d), 0);
     const moments = MOMENTS.map((m) => ({ label: m.label, count: 0 }));
     for (const d of drops) if (d.minute !== null) moments[MOMENTS.findIndex((m) => d.minute < m.max)].count++;
@@ -130,7 +137,8 @@ class DropTracker {
       drops: drops.length,
       boosters,
       presenceHours: Math.round((minutes / 60) * 10) / 10,
-      perHour: minutes ? Math.round((boosters / (minutes / 60)) * 100) / 100 : null,
+      presenceDays: days,
+      perDay: days ? Math.round((boosters / days) * 10) / 10 : null,
       medianMinute: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
       lastAt: drops.at(-1)?.at ?? null,
       moments,
