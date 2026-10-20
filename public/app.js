@@ -365,6 +365,7 @@ function render() {
   renderDormantCard();
   if (dialog.name) renderDialogHeader();
   renderAddButton();
+  renderTokenBanner(lastStatus.token);
 
   const shown = visibleChannels();
   const scope = scopeLabel();
@@ -1203,6 +1204,52 @@ function formatSeconds(s) {
 }
 
 
+
+// --- Compte Twitch de l'IRC à reconnecter (token refusé) ---
+
+function renderTokenBanner(token) {
+  const device = token?.device;
+  const pending = device?.state === "pending" && Date.parse(device.expiresAt) > Date.now();
+  $("token-banner").hidden = !token?.needsAuth && !pending;
+  if ($("token-banner").hidden) return;
+
+  const text = $("token-text");
+  const link = $("token-link");
+  const button = $("token-reconnect");
+  link.hidden = !pending;
+  button.hidden = !token.canReconnect || pending;
+  if (pending) {
+    // Le lien contient déjà le code : il suffit de valider avec le compte du bot
+    link.href = device.verificationUri;
+    text.textContent = "Valide ce code sur Twitch avec le compte de l'IRC : ";
+    const code = document.createElement("span");
+    code.className = "token-code";
+    code.textContent = device.userCode;
+    text.append(code);
+  } else {
+    const expired = device?.state === "expired" || (device?.state === "pending" && !pending);
+    text.textContent = expired ? "🔌 Code expiré : l'IRC est toujours déconnecté."
+      : device?.state === "error" ? `🔌 Reconnexion échouée : ${device.error}`
+      : token.canReconnect ? "🔌 Compte Twitch déconnecté : l'IRC ne peut plus se connecter."
+      : "🔌 Token Twitch refusé : mets à jour TWITCH_OAUTH_TOKEN sur le serveur.";
+    button.textContent = "Reconnecter";
+  }
+}
+
+$("token-reconnect").addEventListener("click", async () => {
+  const button = $("token-reconnect");
+  button.disabled = true;
+  try {
+    const device = await api("/auth/device", {});
+    lastStatus.token = { ...lastStatus.token, device };
+    renderTokenBanner(lastStatus.token);
+    window.open(device.verificationUri, "_blank", "noopener");
+  } catch (err) {
+    showError(err);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 // --- Pause de l'IRC (clic sur l'indicateur en haut) ---
 

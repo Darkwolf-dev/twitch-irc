@@ -120,6 +120,20 @@ class MentionNotifier {
     });
   }
 
+  // Token Twitch refusé : l'IRC ne peut plus se connecter tant que le compte n'est pas reconnecté
+  tokenAlert(reason) {
+    const { discordWebhook } = this.getSettings();
+    if (!discordWebhook) return;
+    this.post(discordWebhook, {
+      embeds: [{
+        title: "🔌 Compte Twitch déconnecté",
+        description: `${reason.replace(/ : relance `npm run auth`$/, "")}\n\nL'IRC ne peut plus se connecter. Ouvre le panneau et clique sur **Reconnecter**.`,
+        color: 0xef4444,
+        timestamp: new Date().toISOString(),
+      }],
+    });
+  }
+
   async test() {
     const { discordWebhook } = this.getSettings();
     if (!discordWebhook) throw new Error("Aucun webhook Discord configuré");

@@ -10,7 +10,7 @@ Téléphone / autre PC ──Tailscale (HTTPS)──► API Express 127.0.0.1:30
 
 - **État voulu → état réel** : l'API modifie seulement la liste des chaînes voulues (persistée). Une boucle de réconciliation envoie les `JOIN`/`PART` nécessaires, à 15 JOIN / 10 s maximum (la limite Twitch est de 20).
 - **Robustesse** : reconnexion automatique avec délai croissant, gestion de `RECONNECT`, PING de keepalive, nouvel essai des JOIN échoués (canal suspendu, banni, sans réponse), puis retour automatique sur toutes les chaînes après une coupure.
-- **Token** : validé toutes les heures (exigence Twitch) et renouvelé automatiquement grâce au refresh token.
+- **Token** : validé toutes les heures (exigence Twitch) et renouvelé automatiquement grâce au refresh token. S'il est refusé, le panneau affiche un bandeau rouge avec un bouton **Reconnecter** (code à valider sur twitch.tv/activate, sans redémarrage) et une alerte part sur Discord.
 
 ## Installation
 
@@ -139,6 +139,8 @@ Aucun port web ouvert sur le serveur : `cloudflared` établit une connexion sort
 - Conteneurs en lecture seule, sans capabilities, avec `no-new-privileges` et des limites de mémoire et de processus.
 
 ### Obtenir le token sur le serveur
+
+Une fois le serveur lancé, le plus simple est le bouton **Reconnecter** du panneau. Sinon, en ligne de commande (le serveur relit le fichier tout seul tant que son token est refusé) :
 
 Le device code flow fonctionne depuis n'importe où : il suffit d'ouvrir le lien affiché depuis ton navigateur.
 

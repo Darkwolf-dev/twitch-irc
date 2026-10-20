@@ -401,6 +401,18 @@ button.pill.state-off { border-color: currentColor; }
 }
 .update-banner[hidden] { display: none; }
 .update-banner button { background: #fff; color: var(--accent); }
+
+/* --- Compte Twitch à reconnecter --- */
+.token-banner {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px;
+  padding: max(8px, env(safe-area-inset-top)) 16px 8px;
+  background: var(--bad); color: #fff; font-size: 14px; font-weight: 600; text-align: center;
+}
+.token-banner[hidden] { display: none; }
+.token-banner a { color: #fff; }
+.token-banner button { background: #fff; color: var(--bad); }
+.token-code { font-family: ui-monospace, monospace; font-size: 16px; letter-spacing: .08em; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, .2); user-select: all; }
 .app-version { margin-top: 24px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* --- Bouton « remonter en haut » --- */

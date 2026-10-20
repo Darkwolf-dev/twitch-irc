@@ -173,6 +173,11 @@ const tokens = new TokenManager({
   clientId: TWITCH_CLIENT_ID,
   clientSecret: TWITCH_CLIENT_SECRET,
   staticToken: TWITCH_OAUTH_TOKEN,
+  onNeedsAuth: (reason) => notifier.tokenAlert(reason),
+  onReconnected: (login) => {
+    notifier.securityAlert("Compte Twitch reconnecté", `L'IRC utilise maintenant le compte **${login}**`);
+    irc.reconnectNow();
+  },
 });
 
 const irc = new TwitchIrc({
@@ -522,6 +527,7 @@ function fullStatus() {
     snoozed: Boolean(settings.dormantSnoozeUntil && Date.parse(settings.dormantSnoozeUntil) > Date.now()),
   };
   status.live = live.status();
+  status.token = tokens.status();
 
   const sizes = new Map();
   for (const set of groups.values()) for (const g of set) sizes.set(g, (sizes.get(g) ?? 0) + 1);
@@ -1078,6 +1084,22 @@ app.post("/maintenance/dormant/days", (req, res) => {
   saveSettings();
   dormant.checkVods([...saved], days);
   res.json({ ok: true, days });
+});
+
+// --- Reconnexion du compte Twitch utilisé par l'IRC (Device Code Flow) ---
+
+app.get("/auth/device", (req, res) => {
+  res.json(tokens.status());
+});
+
+app.post("/auth/device", async (req, res) => {
+  try {
+    const device = await tokens.startDevice();
+    log.log(`[token] Reconnexion du compte Twitch demandée par ${req.user}`);
+    res.json(device);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // --- Pause de l'IRC : { "paused": true } quitte tous les chats et coupe la connexion ---

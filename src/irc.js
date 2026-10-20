@@ -162,6 +162,14 @@ class TwitchIrc {
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
+  // Reconnexion immédiate si on attend un nouvel essai (ex. compte Twitch reconnecté)
+  reconnectNow() {
+    if (this.stopped || this.ws) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts = 0;
+    this.connect();
+  }
+
   raw(line) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(line + "\r\n");
