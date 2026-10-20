@@ -352,7 +352,7 @@
           <li><strong>Drops</strong> : annonces « 🎁 Drop ChatDeck » vues sur 30 jours. <strong>Boosters</strong> : total reçu par ces drops.</li>
           <li><strong>Présence</strong> : heures passées dans le chat pendant le live, et nombre de jours (un jour compte dès 10 min).</li>
           <li><strong>Boosters / jour</strong> : boosters ÷ jours de présence. C'est ce chiffre qui décide quelles chaînes passent en premier quand le plafond de chats est atteint.</li>
-          <li><strong>Moment du live</strong> : quand les drops tombent, comptés depuis le début du live. 5 barres, de gauche à droite : <em>&lt; 30 min</em>, <em>30 min – 1 h</em>, <em>1 – 2 h</em>, <em>2 – 4 h</em>, <em>&gt; 4 h</em>. Plus la barre est haute, plus il y a eu de drops à ce moment. Survole la case pour le détail. Pour une chaîne 24h/24, tout tombe dans la dernière barre.</li>
+          <li><strong>Moment du live</strong> : quand les drops tombent, comptés depuis le début du live. 9 barres de gauche à droite : une par tranche de 30 min (l'écart minimum entre deux drops) jusqu'à 4 h, puis <em>&gt; 4 h</em>. Plus la barre est haute, plus il y a eu de drops à ce moment. Survole la case pour le détail. Pour une chaîne 24h/24, tout tombe dans la dernière barre.</li>
         </ul>
       </section>
       <section>
@@ -363,10 +363,14 @@
           <input id="drops-manual-channel" placeholder="chaîne" aria-label="Chaîne" required>
           <input id="drops-manual-boosters" type="number" min="1" max="50" value="1" aria-label="Boosters" title="Boosters">
           <select id="drops-manual-moment" aria-label="Moment du live">
-            <option value="15">&lt; 30 min</option>
+            <option value="15">0 – 30 min</option>
             <option value="45">30 min – 1 h</option>
-            <option value="90">1 – 2 h</option>
-            <option value="180">2 – 4 h</option>
+            <option value="75">1 h – 1 h 30</option>
+            <option value="105">1 h 30 – 2 h</option>
+            <option value="135">2 h – 2 h 30</option>
+            <option value="165">2 h 30 – 3 h</option>
+            <option value="195">3 h – 3 h 30</option>
+            <option value="225">3 h 30 – 4 h</option>
             <option value="300">&gt; 4 h</option>
           </select>
           <button type="submit" class="small">Ajouter</button>

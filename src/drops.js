@@ -11,12 +11,11 @@ const MIN_DAY_MINUTES = 10;
 // « 🎁 Drop ChatDeck : 782 viewers présents reçoivent 3 boosters Berlu, distribués par paliers sur 3 min → … »
 const ANNOUNCE_RE = /🎁\s*Drop ChatDeck/i;
 const DETAILS_RE = /(\d[\d\s  .]*)\s*viewers?\b.*?\b(\d+)\s*boosters?\s+([^,→]+)/i;
-// Moments du live où les drops tombent (minutes depuis le début)
+// Moments du live où les drops tombent (minutes depuis le début) : tranches de 30 min,
+// l'écart minimum entre deux drops, jusqu'à 4 h
+const hm = (m) => (m % 60 ? `${Math.floor(m / 60)} h 30` : `${m / 60} h`);
 const MOMENTS = [
-  { label: "< 30 min", max: 30 },
-  { label: "30 min – 1 h", max: 60 },
-  { label: "1 – 2 h", max: 120 },
-  { label: "2 – 4 h", max: 240 },
+  ...Array.from({ length: 8 }, (_, i) => ({ label: `${hm(i * 30)} – ${hm((i + 1) * 30)}`, max: (i + 1) * 30 })),
   { label: "> 4 h", max: Infinity },
 ];
 

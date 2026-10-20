@@ -162,7 +162,7 @@ label.check input { width: 18px; height: 18px; }
 .drops-legend { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
 .drops-legend li + li { margin-top: 3px; }
 .moments { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
-.moments span { width: 10px; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }
+.moments span { width: 7px; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }
 .moments span.zero { background: var(--track); }
 button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 
