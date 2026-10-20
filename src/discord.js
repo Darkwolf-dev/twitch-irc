@@ -145,7 +145,7 @@ class MentionNotifier {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // flags 4096 = SUPPRESS_NOTIFICATIONS (@silent) : pas de son ni de push, la mention reste
-        body: JSON.stringify({ username: "Twitch IRC Manager", ...ping, ...payload, ...(silent && { flags: 4096 }) }),
+        body: JSON.stringify({ username: "Twitch Deck", ...ping, ...payload, ...(silent && { flags: 4096 }) }),
         signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) this.log.error(`[discord] Envoi refusé : HTTP ${res.status}`);

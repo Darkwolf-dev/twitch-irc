@@ -1,16 +1,21 @@
 "use strict";
 
-// Génère les icônes de l'appli (PNG) sans dépendance : fond violet arrondi, bulle de chat blanche.
-// Usage : node scripts/make-icons.js
+// Génère les icônes de Twitch Deck (PNG) sans dépendance : fond violet en dégradé, trois cartes
+// empilées (le « deck »), la première avec un point rouge « live » et deux lignes de texte.
+// Même dessin que public/icons/icon.svg. Usage : node scripts/make-icons.js
 
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
 const OUT = path.join(__dirname, "..", "public", "icons");
-const BG = [124, 58, 237];   // #7c3aed
-const FG = [255, 255, 255];
-const SS = 4;                // suréchantillonnage pour l'anticrénelage
+const TOP = [139, 68, 247];    // #8b44f7
+const BOTTOM = [91, 31, 191];  // #5b1fbf
+const WHITE = [255, 255, 255];
+const RED = [233, 25, 22];     // #e91916
+const INK = [119, 44, 232];    // #772ce8
+const SOFT = [205, 186, 248];  // #cdbaf8
+const SS = 4;                  // suréchantillonnage pour l'anticrénelage
 
 function inRoundRect(x, y, x0, y0, x1, y1, r) {
   if (x < x0 || x > x1 || y < y0 || y > y1) return false;
@@ -19,13 +24,7 @@ function inRoundRect(x, y, x0, y0, x1, y1, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
-function inTriangle(px, py, [ax, ay], [bx, by], [cx, cy]) {
-  const s = (ax - cx) * (py - cy) - (ay - cy) * (px - cx);
-  const t = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
-  if ((s < 0) !== (t < 0) && s !== 0 && t !== 0) return false;
-  const d = (cx - bx) * (py - by) - (cy - by) * (px - bx);
-  return d === 0 || (d < 0) === (s + t <= 0);
-}
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
 // Couleur d'un point en coordonnées 0..1. maskable : fond plein bord à bord (Android découpe lui-même)
 function shade(u, v, maskable) {
@@ -33,14 +32,19 @@ function shade(u, v, maskable) {
   if (!inside) return null;
   const k = maskable ? 0.8 : 1; // zone sûre des icônes « maskable »
   const m = (a) => 0.5 + (a - 0.5) * k;
-  const bubble =
-    inRoundRect(u, v, m(0.2), m(0.24), m(0.8), m(0.66), 0.09 * k) ||
-    inTriangle(u, v, [m(0.3), m(0.6)], [m(0.46), m(0.6)], [m(0.28), m(0.8)]);
-  if (!bubble) return BG;
-  for (const dx of [0.36, 0.5, 0.64]) {
-    if ((u - m(dx)) ** 2 + (v - m(0.45)) ** 2 <= (0.045 * k) ** 2) return BG;
+  const rect = (x0, y0, x1, y1, r) => inRoundRect(u, v, m(x0), m(y0), m(x1), m(y1), r * k);
+
+  let c = mix(TOP, BOTTOM, v);
+  if (rect(0.31, 0.17, 0.81, 0.59, 0.07)) c = mix(c, WHITE, 0.32); // carte du fond
+  if (rect(0.25, 0.25, 0.75, 0.67, 0.07)) c = mix(c, WHITE, 0.6);  // carte du milieu
+  if (rect(0.19, 0.33, 0.69, 0.79, 0.07)) {                        // carte de devant
+    c = WHITE;
+    if ((u - m(0.3)) ** 2 + (v - m(0.47)) ** 2 <= (0.05 * k) ** 2) c = RED;
+    if (rect(0.38, 0.44, 0.6, 0.5, 0.03)) c = INK;
+    if (rect(0.27, 0.6, 0.6, 0.66, 0.03)) c = SOFT;
+    if (rect(0.27, 0.69, 0.5, 0.73, 0.02)) c = SOFT;
   }
-  return FG;
+  return c;
 }
 
 function render(size, maskable = false) {

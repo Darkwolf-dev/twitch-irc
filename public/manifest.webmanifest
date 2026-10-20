@@ -1,6 +1,6 @@
 {
-  "name": "Twitch IRC Manager",
-  "short_name": "IRC Manager",
+  "name": "Twitch Deck",
+  "short_name": "Twitch Deck",
   "description": "Pilote les chats Twitch rejoints par ton serveur",
   "lang": "fr",
   "start_url": "/",

@@ -5,7 +5,7 @@
 // qui se recharge toute seule. Seule cette page de secours est mise en cache : les données
 // viennent toujours du serveur.
 
-const CACHE = "offline-v3"; // à changer quand les fichiers de la page de secours changent
+const CACHE = "offline-v4"; // à changer quand les fichiers de la page de secours changent
 const OFFLINE_FILES = ["offline.html", "offline.css", "offline.js", "icons/icon.svg"];
 // 530 = erreur Cloudflare (tunnel injoignable, ex. erreur 1033) ; 502-504 = passerelle
 const DOWN_STATUSES = new Set([502, 503, 504, 530]);

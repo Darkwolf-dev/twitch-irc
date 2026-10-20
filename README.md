@@ -1,4 +1,4 @@
-# Twitch IRC Manager
+# Twitch Deck
 
 Un compte Twitch, jusqu'à 100 chaînes, piloté à distance par une API HTTP protégée par un secret.
 
