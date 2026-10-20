@@ -327,12 +327,13 @@ function render() {
 
   const pill = $("irc");
   pill.hidden = false;
-  pill.textContent = irc.paused ? "⏸ IRC en pause" : irc.connected ? `IRC : ${irc.username}` : "IRC déconnecté";
+  // Le pseudo est déjà affiché par le menu du compte : la pastille ne donne que l'état (pseudo dans l'infobulle)
+  pill.textContent = irc.paused ? "⏸ IRC en pause" : irc.connected ? "● IRC connecté" : "IRC déconnecté";
   pill.className = `pill ${irc.connected && !irc.paused ? "state-joined" : "state-off"}`;
   pill.setAttribute("aria-pressed", String(irc.paused));
   pill.title = irc.paused
     ? "IRC en pause : aucun chat rejoint. Clique pour reconnecter."
-    : `${irc.lastError ? `${irc.lastError}\n` : ""}Clique pour mettre l'IRC en pause (quitte tous les chats).`;
+    : `${irc.connected ? `Connecté en tant que ${irc.username}\n` : ""}${irc.lastError ? `${irc.lastError}\n` : ""}Clique pour mettre l'IRC en pause (quitte tous les chats).`;
 
   const liveError = lastStatus.live.lastError ? `\n⚠ Statut live indisponible : ${lastStatus.live.lastError}` : "";
   pill.title = `${counts.joined} connectées · ${counts.desired}/${limits.concurrent} rejointes · ` +
