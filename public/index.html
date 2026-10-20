@@ -27,9 +27,23 @@
 </div>
 <main>
   <header>
-    <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>IRC Manager</h1>
+    <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="title-text">IRC Manager</span></h1>
+    <div id="profile-box" class="profile-actions" hidden>
+      <select id="profile-select" aria-label="Profil"></select>
+      <span id="profile-state" class="hint"></span>
+      <button type="button" id="profile-menu-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Gérer les profils" title="Gérer les profils">⋯</button>
+      <div id="profile-menu" class="account-menu" role="menu" hidden>
+        <button type="button" id="profile-new" role="menuitem" class="menu-item">＋ Enregistrer l'état actuel comme nouveau profil…</button>
+        <button type="button" id="profile-update" role="menuitem" class="menu-item">↻ Mettre à jour le profil actuel</button>
+        <div id="profile-delete-list" class="menu-section"></div>
+      </div>
+    </div>
     <div class="who">
-      <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
+      <button type="button" id="irc" class="pill" hidden></button>
+      <span class="badge-wrap">
+        <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
+        <span id="dormant-badge" class="count-badge" hidden></span>
+      </span>
       <div class="account" id="account" hidden>
         <button type="button" id="me" class="me" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu"></button>
         <div id="account-menu" class="account-menu" role="menu" hidden>
@@ -38,7 +52,6 @@
           <button type="button" id="logout" role="menuitem" class="menu-item danger-text">Se déconnecter</button>
         </div>
       </div>
-      <button type="button" id="irc" class="pill" hidden></button>
     </div>
   </header>
 
@@ -59,88 +72,58 @@
   </section>
 
   <section id="panel" hidden>
-    <form id="add" class="row">
-      <input id="names" placeholder="Ajouter : chaine1, chaine2 …" autocomplete="off" autocapitalize="off" required>
-      <button>Ajouter</button>
-    </form>
-    <div class="options">
-      <label class="check"><input id="add-join" type="checkbox" checked> Activer directement</label>
-      <label class="check"><input id="add-live" type="checkbox" checked> Seulement pendant le live</label>
+    <div class="sticky-bar">
+      <form id="add" class="search-row" autocomplete="off">
+        <div class="search">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="names" type="search" placeholder="Chercher ou ajouter une chaîne" aria-label="Chercher ou ajouter des chaînes (séparées par des virgules)" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+          <span id="add-split" class="add-split" hidden>
+            <button type="button" id="add-btn" class="small"></button>
+            <button type="button" id="add-more" class="small" aria-haspopup="menu" aria-expanded="false" aria-label="Autres options d'ajout" title="Autres options d'ajout">▾</button>
+            <span id="add-menu" class="account-menu" role="menu" hidden>
+              <button type="button" role="menuitem" class="menu-item" data-add="off">Ajouter désactivée</button>
+              <button type="button" role="menuitem" class="menu-item" data-add="always">Ajouter en mode « toujours »</button>
+            </span>
+          </span>
+        </div>
+        <select id="sort" class="sort-select" aria-label="Trier par" title="Trier par">
+          <option value="status">Statut</option>
+          <option value="viewers">Spectateurs</option>
+          <option value="name">Nom</option>
+          <option value="activity">Dernier message</option>
+        </select>
+        <div class="bulk-actions">
+          <button type="button" id="bulk-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Actions groupées" title="Actions groupées">⋯</button>
+          <div id="bulk-menu" class="account-menu" role="menu" hidden>
+            <p id="bulk-scope" class="menu-title"></p>
+            <button type="button" id="all-on" role="menuitem" class="menu-item">Tout activer</button>
+            <button type="button" id="all-off" role="menuitem" class="menu-item danger-text">Tout désactiver</button>
+            <div class="menu-section">
+              <p id="mode-label" class="menu-title">Quand rejoindre le chat</p>
+              <p id="mode-current" class="hint menu-hint"></p>
+              <button type="button" id="mode-always" role="menuitem" class="menu-item" title="Rejoindre le chat en permanence">Toujours</button>
+              <button type="button" id="mode-live" role="menuitem" class="menu-item" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
+            </div>
+          </div>
+        </div>
+      </form>
+      <div class="chips scroller view-row" role="group" aria-label="Afficher">
+        <button type="button" data-view="all" class="chip active">Toutes <span class="n" data-count="all"></span></button>
+        <button type="button" data-view="live" class="chip">En live <span class="n" data-count="live"></span></button>
+        <button type="button" data-view="fav" class="chip">Favoris <span class="n" data-count="fav"></span></button>
+        <button type="button" data-view="on" class="chip">Activées <span class="n" data-count="on"></span></button>
+        <button type="button" data-view="off" class="chip">Désactivées <span class="n" data-count="off"></span></button>
+        <span id="group-sep" class="chip-sep" aria-hidden="true" hidden></span>
+        <span id="group-tabs" class="chip-group" role="group" aria-label="Groupes"></span>
+      </div>
     </div>
     <p id="error" class="error" role="alert"></p>
 
-    <div id="dormant-card" class="dormant-card" hidden>
-      <span class="dormant-icon" aria-hidden="true">🧹</span>
-      <p id="dormant-text"></p>
-      <div class="bulk">
-        <button type="button" id="dormant-open">Voir</button>
-        <div class="snooze" role="group" aria-label="Masquer la suggestion">
-          <span class="hint">Masquer</span>
-          <button type="button" class="ghost small" data-snooze="1">1 j</button>
-          <button type="button" class="ghost small" data-snooze="2">2 j</button>
-          <button type="button" class="ghost small" data-snooze="7">7 j</button>
-        </div>
-      </div>
+    <div id="toast" class="toast" role="status" hidden>
+      <span id="toast-text"></span>
+      <button type="button" id="toast-open" class="ghost small">Ouvrir la fiche</button>
+      <button type="button" id="toast-undo" class="ghost small">Annuler</button>
     </div>
-
-    <div class="profile-bar">
-      <label for="profile-select">Profil</label>
-      <select id="profile-select"></select>
-      <span id="profile-state" class="hint"></span>
-      <div class="profile-actions">
-        <button type="button" id="profile-menu-btn" class="ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Gérer les profils">⋯</button>
-        <div id="profile-menu" class="account-menu" role="menu" hidden>
-          <button type="button" id="profile-new" role="menuitem" class="menu-item">＋ Enregistrer l'état actuel comme nouveau profil…</button>
-          <button type="button" id="profile-update" role="menuitem" class="menu-item">↻ Mettre à jour le profil actuel</button>
-          <div id="profile-delete-list" class="menu-section"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="sticky-bar">
-      <div class="toolbar">
-        <span id="counts"></span>
-      </div>
-      <div class="scroller">
-        <div class="segmented" role="group" aria-label="Afficher">
-          <button type="button" data-view="all" class="active">Toutes</button>
-          <button type="button" data-view="fav">★ Favoris</button>
-          <button type="button" data-view="live">● En live</button>
-          <button type="button" data-view="on">Activées</button>
-          <button type="button" data-view="off">Désactivées</button>
-        </div>
-      </div>
-      <div id="group-tabs" class="chips scroller" role="group" aria-label="Groupes"></div>
-      <div class="toolbar filters">
-        <input id="filter" type="search" placeholder="Filtrer" autocapitalize="off">
-        <select id="sort" aria-label="Trier par">
-          <option value="status">Tri : statut</option>
-          <option value="viewers">Tri : spectateurs</option>
-          <option value="name">Tri : nom</option>
-          <option value="activity">Tri : dernier message</option>
-        </select>
-      </div>
-    </div>
-
-    <details class="bulk-box">
-      <summary>Actions groupées</summary>
-      <div class="toolbar">
-        <div class="bulk">
-          <button type="button" id="all-on" class="ghost">Tout activer</button>
-          <button type="button" id="all-off" class="ghost">Tout désactiver</button>
-        </div>
-      </div>
-      <div class="toolbar mode-bar">
-        <div>
-          <span id="mode-label">Quand rejoindre le chat :</span>
-          <div id="mode-current" class="hint"></div>
-        </div>
-        <div class="bulk">
-          <button type="button" id="mode-always" class="ghost" title="Rejoindre le chat en permanence">Toujours</button>
-          <button type="button" id="mode-live" class="ghost" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
-        </div>
-      </div>
-    </details>
 
     <ul id="channels"></ul>
 
@@ -167,6 +150,13 @@
             <p class="hint">Moins tu es présent dans de chats à la fois, moins ton compte ressemble à un bot. Au-delà du plafond : priorité aux chaînes « toujours », puis aux favoris, puis aux plus gros lives.</p>
             <p id="settings-status" class="hint" role="status"></p>
           </form>
+
+          <div class="card">
+            <h3>Ajout de chaînes</h3>
+            <p class="hint">Options appliquées quand tu ajoutes une chaîne depuis la barre de recherche (le menu ▾ du bouton « Ajouter » permet d'en choisir d'autres ponctuellement).</p>
+            <label class="check"><input id="add-join" type="checkbox" checked> Activer directement</label>
+            <label class="check"><input id="add-live" type="checkbox" checked> Seulement pendant le live</label>
+          </div>
 
           <form id="schedule-form" class="card">
             <h3>Plage horaire</h3>

@@ -101,6 +101,7 @@ function logout(message) {
   $("account").hidden = true;
   $("account-menu").hidden = true;
   $("open-settings").hidden = true;
+  $("profile-box").hidden = true;
   if ($("settings-dialog").open) $("settings-dialog").close();
   showLogin(message);
 }
@@ -267,11 +268,16 @@ function formatDuration(iso) {
 
 const viewers = new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 });
 
+// Mots tapés dans « chercher ou ajouter » (« #Chaine1, chaine2 » → ["chaine1", "chaine2"])
+function typedNames() {
+  return [...new Set($("names").value.toLowerCase().split(/[\s,;]+/).map((n) => n.replace(/^#/, "")).filter(Boolean))];
+}
+
 function visibleChannels() {
-  const filter = $("filter").value.trim().toLowerCase();
+  const words = typedNames();
   return lastStatus.channels
     .filter((c) => {
-      if (!c.name.includes(filter)) return false;
+      if (words.length && !words.some((w) => c.name.includes(w))) return false;
       if (view === "fav") return c.favorite;
       if (view === "live") return c.live;
       if (view === "on") return c.enabled;
@@ -305,7 +311,7 @@ function scopeLabel() {
   if (view === "fav") return "les favoris";
   if (view === "live") return "les lives";
   if (view.startsWith("group:")) return `« ${view.slice(6)} »`;
-  if ($("filter").value.trim() || view === "on" || view === "off") return "la sélection";
+  if (typedNames().length || view === "on" || view === "off") return "la sélection";
   return null;
 }
 
@@ -328,15 +334,17 @@ function render() {
     ? "IRC en pause : aucun chat rejoint. Clique pour reconnecter."
     : `${irc.lastError ? `${irc.lastError}\n` : ""}Clique pour mettre l'IRC en pause (quitte tous les chats).`;
 
-  const liveError = lastStatus.live.lastError ? " · ⚠ statut live indisponible" : "";
-  $("counts").textContent =
-    `${counts.joined} connectées · ${counts.desired}/${limits.concurrent} rejointes · ` +
-    `${counts.live} en live · ${counts.saved} enregistrées${liveError}`;
+  const liveError = lastStatus.live.lastError ? `\n⚠ Statut live indisponible : ${lastStatus.live.lastError}` : "";
+  pill.title = `${counts.joined} connectées · ${counts.desired}/${limits.concurrent} rejointes · ` +
+    `${counts.live} en live · ${counts.saved} enregistrées${liveError}\n\n${pill.title}`;
+  pill.classList.toggle("warn", Boolean(liveError));
+  const viewCounts = { all: counts.saved, live: counts.live, fav: counts.favorites, on: counts.enabled, off: counts.saved - counts.enabled };
+  for (const n of document.querySelectorAll("[data-count]")) n.textContent = String(viewCounts[n.dataset.count] ?? "");
   renderSettings();
   renderProfiles();
   renderDormantCard();
   if (dialog.name) renderDialogHeader();
-  $("counts").title = lastStatus.live.lastError || "";
+  renderAddButton();
 
   const shown = visibleChannels();
   const scope = scopeLabel();
@@ -349,7 +357,7 @@ function render() {
     : liveOnlyCount === 0 ? "toutes rejointes en permanence"
     : liveOnlyCount === shown.length ? "toutes rejointes seulement pendant leur live"
     : `${liveOnlyCount} seulement en live, ${shown.length - liveOnlyCount} en permanence`;
-  $("mode-label").textContent = `Quand rejoindre le chat (${scope ?? "toutes les chaînes"}) :`;
+  $("bulk-scope").textContent = `Actions sur ${scope ?? "toutes les chaînes"} (${shown.length})`;
   $("mode-current").textContent = current;
   $("mode-always").disabled = liveOnlyCount === 0;
   $("mode-live").disabled = liveOnlyCount === shown.length;
@@ -866,6 +874,7 @@ function renderGroupTabs() {
     }, `${group.name} · ${group.count}`));
   }
   container.hidden = lastStatus.groups.length === 0;
+  $("group-sep").hidden = container.hidden;
 }
 
 function setView(value) {
@@ -1000,10 +1009,12 @@ $("schedule-form").addEventListener("submit", async (e) => {
 
 function renderDormantCard() {
   const d = lastStatus.dormant;
-  $("dormant-card").hidden = !d.count || d.snoozed;
-  $("dormant-text").textContent = d.count === 1
-    ? `1 chaîne n'a pas streamé depuis ${d.days} jours ou plus. La retirer ?`
-    : `${d.count} chaînes n'ont pas streamé depuis ${d.days} jours ou plus. Les retirer ?`;
+  const show = d.count > 0 && !d.snoozed;
+  $("dormant-badge").hidden = !show;
+  $("dormant-badge").textContent = String(d.count);
+  $("open-settings").title = show
+    ? `Réglages · ${d.count} chaîne(s) sans live depuis ${d.days} jours ou plus`
+    : "Réglages";
   if (document.activeElement !== $("dormant-days")) $("dormant-days").value = String(d.days);
 }
 
@@ -1072,7 +1083,6 @@ async function dormantBulk(path, verb) {
   }
 }
 
-$("dormant-open").addEventListener("click", openDormant);
 $("dormant-open-2").addEventListener("click", openDormant);
 $("dormant-close").addEventListener("click", () => $("dormant-dialog").close());
 $("dormant-dialog").addEventListener("click", (e) => { if (e.target === $("dormant-dialog")) $("dormant-dialog").close(); });
@@ -1082,12 +1092,6 @@ $("dormant-all").addEventListener("change", (e) => {
 });
 $("dormant-remove").addEventListener("click", () => dormantBulk("/channels/remove", "Retirer de la liste"));
 $("dormant-disable").addEventListener("click", () => dormantBulk("/channels/part", "Désactiver"));
-for (const b of document.querySelectorAll("[data-snooze]")) {
-  b.addEventListener("click", async () => {
-    await api("/maintenance/dormant/snooze", { days: Number(b.dataset.snooze) }).catch(showError);
-    refresh();
-  });
-}
 
 $("dormant-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1279,7 +1283,8 @@ function openSettings(tab) {
 }
 
 for (const b of document.querySelectorAll("[data-stab]")) b.addEventListener("click", () => showSettingsTab(b.dataset.stab));
-$("open-settings").addEventListener("click", () => openSettings());
+// Chaînes endormies signalées par la pastille : ouvrir directement l'onglet Liste
+$("open-settings").addEventListener("click", () => openSettings($("dormant-badge").hidden ? undefined : "list"));
 $("settings-close").addEventListener("click", () => $("settings-dialog").close());
 $("settings-dialog").addEventListener("click", (e) => { if (e.target === $("settings-dialog")) $("settings-dialog").close(); });
 
@@ -1442,6 +1447,7 @@ async function loadMe() {
     }
     $("account").hidden = false;
     $("open-settings").hidden = false;
+    $("profile-box").hidden = false;
   } catch (err) {
     $("account").hidden = true;
   }
@@ -1494,27 +1500,119 @@ $("secret-form").addEventListener("submit", async (e) => {
   start();
 });
 
-$("add").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const names = $("names").value.split(/[\s,;]+/).filter(Boolean);
+// --- Chercher ou ajouter ---
+// Le champ filtre la liste ; les noms qui ne sont pas encore enregistrés peuvent être ajoutés
+// avec les options par défaut (Réglages → Général) ou celles du menu ▾.
+
+const ADD_PREFS_KEY = "twitch-irc-add-prefs";
+function addPrefs() {
+  try { return { join: true, liveOnly: true, ...JSON.parse(localStorage.getItem(ADD_PREFS_KEY) || "{}") }; } catch { return { join: true, liveOnly: true }; }
+}
+function saveAddPrefs() {
+  try { localStorage.setItem(ADD_PREFS_KEY, JSON.stringify({ join: $("add-join").checked, liveOnly: $("add-live").checked })); } catch {}
+}
+$("add-join").checked = addPrefs().join;
+$("add-live").checked = addPrefs().liveOnly;
+$("add-join").addEventListener("change", saveAddPrefs);
+$("add-live").addEventListener("change", saveAddPrefs);
+
+function newNames() {
+  const known = new Set(lastStatus?.channels.map((c) => c.name) ?? []);
+  return typedNames().filter((n) => /^[a-z0-9_]{1,25}$/.test(n) && !known.has(n));
+}
+
+function renderAddButton() {
+  const names = newNames();
+  $("add-split").hidden = !names.length;
+  $("add-btn").textContent = names.length === 1 ? `+ Ajouter « ${names[0]} »` : `+ Ajouter ${names.length} chaînes`;
+}
+
+function toggleAddMenu(open = $("add-menu").hidden) {
+  $("add-menu").hidden = !open;
+  $("add-more").setAttribute("aria-expanded", String(open));
+}
+
+// Bandeau après un ajout : ouvrir la fiche ou annuler
+const toast = { timer: null, names: [] };
+function showToast(names, label) {
+  toast.names = names;
+  $("toast-text").textContent = `${names.length === 1 ? names[0] : `${names.length} chaînes`} ajoutée${names.length > 1 ? "s" : ""} · ${label}`;
+  $("toast-open").hidden = names.length !== 1;
+  $("toast").hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { $("toast").hidden = true; }, 10_000);
+}
+
+async function addChannels({ join, liveOnly }) {
+  const names = newNames();
   if (!names.length) return;
-  const button = e.submitter;
-  button.disabled = true;
+  toggleAddMenu(false);
+  $("add-btn").disabled = true;
   $("error").textContent = "";
   try {
-    if ($("add-join").checked) {
-      await api("/channels/join", { channels: names, liveOnly: $("add-live").checked });
+    if (join) {
+      await api("/channels/join", { channels: names, liveOnly });
     } else {
       await api("/channels/add", { channels: names });
-      if ($("add-live").checked) await api("/channels/mode", { channels: names, liveOnly: true });
+      if (liveOnly) await api("/channels/mode", { channels: names, liveOnly: true });
     }
     $("names").value = "";
+    showToast(names, `${join ? "activée" : "désactivée"}${names.length > 1 ? "s" : ""}, ${liveOnly ? "si live" : "toujours"}`);
     await refresh();
   } catch (err) {
     showError(err);
   } finally {
-    button.disabled = false;
+    $("add-btn").disabled = false;
   }
+}
+
+$("names").addEventListener("input", render);
+// Entrée : ajoute les nouveaux noms, sinon ouvre la fiche si une seule chaîne correspond
+$("add").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (newNames().length) return addChannels(addPrefs());
+  const shown = lastStatus ? visibleChannels() : [];
+  if (typedNames().length && shown.length === 1) openChannel(shown[0].name);
+});
+$("add-btn").addEventListener("click", () => addChannels(addPrefs()));
+$("add-more").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleAddMenu();
+});
+for (const b of document.querySelectorAll("[data-add]")) {
+  b.addEventListener("click", () => addChannels(b.dataset.add === "off"
+    ? { join: false, liveOnly: addPrefs().liveOnly }
+    : { join: true, liveOnly: false }));
+}
+$("toast-open").addEventListener("click", () => {
+  $("toast").hidden = true;
+  openChannel(toast.names[0]);
+});
+$("toast-undo").addEventListener("click", () => {
+  $("toast").hidden = true;
+  act("/channels/remove", toast.names);
+});
+
+// Menu des actions groupées
+function toggleBulkMenu(open = $("bulk-menu").hidden) {
+  $("bulk-menu").hidden = !open;
+  $("bulk-btn").setAttribute("aria-expanded", String(open));
+}
+$("bulk-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleBulkMenu();
+});
+for (const id of ["all-on", "all-off", "mode-always", "mode-live"]) {
+  $(id).addEventListener("click", () => toggleBulkMenu(false));
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".bulk-actions")) toggleBulkMenu(false);
+  if (!e.target.closest(".add-split")) toggleAddMenu(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  toggleBulkMenu(false);
+  toggleAddMenu(false);
 });
 
 $("all-on").addEventListener("click", () => {
@@ -1540,7 +1638,6 @@ $("mode-live").addEventListener("click", () => {
 for (const b of document.querySelectorAll("[data-view]")) {
   b.addEventListener("click", () => setView(b.dataset.view));
 }
-$("filter").addEventListener("input", render);
 
 const SORT_KEY = "twitch-irc-sort";
 try { const saved = localStorage.getItem(SORT_KEY); if (saved && SORTS[saved]) $("sort").value = saved; } catch {}
