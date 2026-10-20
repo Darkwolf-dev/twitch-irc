@@ -12,13 +12,13 @@ const LABELS = {
   offline: "attend le live",
   full: "limite atteinte",
   schedule: "hors plage horaire",
-  watched: "vu, quitté",
+  watched: "fini, quitté",
 };
 const STATE_HINTS = {
   offline: "Mode « si live » : le chat sera rejoint au début du prochain live",
   full: "Plafond de chats simultanés atteint (réglable dans Réglages)",
   schedule: "En live, mais en dehors de la plage horaire (réglable dans Réglages)",
-  watched: "Assez regardée aujourd'hui : chat quitté jusqu'à 2 h",
+  watched: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h",
 };
 
 let secret = null;
@@ -280,6 +280,7 @@ function visibleChannels() {
       if (words.length && !words.some((w) => c.name.includes(w))) return false;
       if (view === "fav") return c.favorite;
       if (view === "live") return c.live;
+      if (view === "done") return c.watched;
       if (view === "on") return c.enabled;
       if (view === "off") return !c.enabled;
       if (view.startsWith("group:")) return c.groups.includes(view.slice(6));
@@ -288,18 +289,18 @@ function visibleChannels() {
     .sort(SORTS[$("sort").value] ?? SORTS.status);
 }
 
-// Rang « statut » : en live et activées, en live désactivées, en live marquées « vu »,
+// Rang « statut » : en live et activées, en live désactivées, en live marquées « fini »,
 // chats rejoints hors live, puis le reste
 const statusRank = (c) =>
   c.live ? (c.watched ? 2 : c.enabled ? 0 : 1) : c.state === "joined" || c.state === "joining" ? 3 : 4;
 const byName = (a, b) => a.name.localeCompare(b.name);
-// Un favori marqué « vu » perd sa priorité jusqu'à 2 h
+// Un favori marqué « fini » perd sa priorité jusqu'à 2 h
 const priority = (c) => Boolean(c.favorite && !c.watched);
 const SORTS = {
   // lives d'abord ; dans chaque bloc (live / hors live) les favoris en tête, puis statut, puis nom
   status: (a, b) => (Boolean(b.live) - Boolean(a.live)) || (priority(b) - priority(a)) ||
     (statusRank(a) - statusRank(b)) || byName(a, b),
-  // lives du plus gros au plus petit (les chaînes « vu » après), puis les autres par nom
+  // lives du plus gros au plus petit (les chaînes « fini » après), puis les autres par nom
   viewers: (a, b) => (a.watched - b.watched) || ((b.live?.viewers ?? -1) - (a.live?.viewers ?? -1)) || byName(a, b),
   name: byName,
   // dernier message reçu le plus récent en premier, les chats muets à la fin
@@ -310,6 +311,7 @@ const SORTS = {
 function scopeLabel() {
   if (view === "fav") return "les favoris";
   if (view === "live") return "les lives";
+  if (view === "done") return "les chaînes finies";
   if (view.startsWith("group:")) return `« ${view.slice(6)} »`;
   if (typedNames().length || view === "on" || view === "off") return "la sélection";
   return null;
@@ -339,7 +341,10 @@ function render() {
   pill.title = `${counts.joined} connectées · ${counts.desired}/${limits.concurrent} rejointes · ` +
     `${counts.live} en live · ${counts.saved} enregistrées${liveError}\n\n${pill.title}`;
   pill.classList.toggle("warn", Boolean(liveError));
-  const viewCounts = { all: counts.saved, live: counts.live, fav: counts.favorites, on: counts.enabled, off: counts.saved - counts.enabled };
+  const viewCounts = {
+    all: counts.saved, live: counts.live, fav: counts.favorites, on: counts.enabled, off: counts.saved - counts.enabled,
+    done: channels.filter((c) => c.watched).length,
+  };
   for (const n of document.querySelectorAll("[data-count]")) n.textContent = String(viewCounts[n.dataset.count] ?? "");
   renderSettings();
   renderProfiles();
@@ -398,8 +403,8 @@ function renderChannel(channel) {
     "aria-pressed": String(channel.watched),
     "aria-label": `${channel.name} assez regardée aujourd'hui`,
     title: channel.watched
-      ? "Assez regardée aujourd'hui : chat quitté et chaîne reléguée jusqu'à 2 h (clic : annuler)"
-      : "Assez regardée aujourd'hui : quitter le chat et la reléguer en bas jusqu'à 2 h",
+      ? "Finie pour aujourd'hui : chat quitté et chaîne reléguée jusqu'à 2 h (clic : annuler)"
+      : "Finie pour aujourd'hui : quitter le chat et la reléguer en bas jusqu'à 2 h",
     onclick: () => act("/channels/watched", [channel.name], { watched: !channel.watched }),
   }, "✓");
 
@@ -434,7 +439,7 @@ function renderChannel(channel) {
     }, channel.name),
     badge,
     sanction,
-    channel.watched && el("span", { class: "seen-badge", title: "Assez regardée aujourd'hui : chat quitté jusqu'à 2 h" }, "vu"),
+    channel.watched && el("span", { class: "seen-badge", title: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h" }, "fini"),
     el("a", {
       class: "twitch-link",
       href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
@@ -463,8 +468,6 @@ function renderChannel(channel) {
     message = el("span", { class: "last", title: `${last.user} : ${last.text}` },
       el("time", { dateTime: last.at }, formatAge(last.ageSeconds)),
       " · ", el("strong", {}, last.user), ` : ${last.text}`);
-  } else if (channel.state === "joined") {
-    message = el("span", { class: "last" }, "Aucun message reçu");
   }
 
   // Ligne 4 : seulement les exceptions — mode « toujours » (24/7) et groupes. Le mode « si live »,
@@ -528,7 +531,8 @@ function avatar(channel) {
   let hash = 0;
   for (const ch of channel.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   const node = el("span", { class: `avatar${channel.live ? " is-live" : ""}`, "aria-hidden": "true" },
-    channel.name[0].toUpperCase());
+    channel.name[0].toUpperCase(),
+    channel.avatar && el("img", { src: channel.avatar, alt: "", loading: "lazy", decoding: "async" }));
   node.style.setProperty("--hue", String(hash % 360)); // CSSOM : autorisé par la CSP
   return node;
 }
@@ -827,13 +831,13 @@ function renderChannelSettings(channel) {
         onclick: () => run("/channels/favorite", { favorite: !channel.favorite }),
       }, channel.favorite ? "★ favori" : "☆ ajouter aux favoris")),
     el("div", { class: "field" },
-      el("span", { class: "field-label" }, "Assez regardée aujourd'hui"),
+      el("span", { class: "field-label" }, "Finie pour aujourd'hui"),
       el("button", {
         type: "button", class: `seen big${channel.watched ? " is-seen" : ""}`, disabled: isBusy,
         "aria-pressed": String(channel.watched),
         title: "Quitte le chat et relègue la chaîne en bas de la liste. Remise à zéro chaque jour à 2 h",
         onclick: () => run("/channels/watched", { watched: !channel.watched }),
-      }, channel.watched ? "✓ vu jusqu'à 2 h" : "marquer comme vu")),
+      }, channel.watched ? "✓ finie jusqu'à 2 h" : "marquer comme finie")),
     el("div", { class: "field column" },
       el("span", { class: "field-label" }, "Quand rejoindre le chat"),
       el("div", { class: "segmented" }, modeBtn(false, "Toujours"), modeBtn(true, "Seulement en live"))),

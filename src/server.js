@@ -14,6 +14,7 @@ const { SessionStore, readCookie, cookieHeader, COOKIE, SESSION_TTL_MS } = requi
 const { MentionNotifier, isWebhookUrl, isDiscordUserId, formatDuration } = require("./discord");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
+const { AvatarStore } = require("./avatars");
 
 const {
   API_SECRET = "",
@@ -251,6 +252,7 @@ function activeSanction(channel) {
 }
 
 const dormant = new DormantTracker({ dataDir: DATA_DIR, getToken: () => tokens.get(), log });
+const avatars = new AvatarStore({ dataDir: DATA_DIR, getToken: () => tokens.get(), log });
 
 const alwaysCount = () => [...enabled].filter((n) => !liveOnly.has(n)).length;
 
@@ -490,6 +492,7 @@ function channelInfo(name) {
     liveOnly: liveOnly.has(name),
     live: live.info(name),
     lastLive: dormant.lastLiveOf(name)?.at ?? null,
+    avatar: avatars.url(name),
     sanction: activeSanction(name),
     favorite: favorites.has(name),
     groups: groupsOf(name),
@@ -547,10 +550,14 @@ app.get("/healthz", (req, res) => {
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 app.use(
   express.static(path.join(__dirname, "..", "public"), {
-    setHeaders(res) {
+    setHeaders(res, filePath) {
       res.set({
         "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https://static-cdn.jtvnw.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         "Referrer-Policy": "no-referrer",
+        // Icônes : gardées 7 jours. Le reste (page, script, style) : gardé mais revérifié à chaque
+        // chargement via l'ETag (réponse 304 sans contenu s'il n'a pas changé), pour qu'un déploiement
+        // soit pris tout de suite.
+        "Cache-Control": filePath.includes(`${path.sep}icons${path.sep}`) ? "public, max-age=604800" : "no-cache",
       });
     },
   })
@@ -879,6 +886,7 @@ app.post("/channels/add", (req, res) => {
   const added = names.filter((name) => !saved.has(name));
   for (const name of names) saved.add(name);
   dormant.track(names);
+  avatars.refresh(names);
   if (added.length) {
     log.log(`[api] Ajoutées : ${summarize(added)}`);
     live.pollSoon();
@@ -908,6 +916,7 @@ app.post("/channels/join", (req, res) => {
     irc.retry(name);
   }
   dormant.track(names);
+  avatars.refresh(names);
   log.log(`[api] Activées${req.body.liveOnly ? " (si live)" : ""} : ${summarize(names)}`);
   if (added.length) live.pollSoon();
   res.status(202).json({ ok: true, channels: commit(names) });
@@ -1179,6 +1188,7 @@ app.post("/channels/remove", (req, res) => {
     watched.delete(name);
     stats.forget(name);
     dormant.forget(name);
+    avatars.forget(name);
   }
   log.log(`[api] Retirées de la liste : ${summarize(names)}`);
   commit([]);
@@ -1228,7 +1238,7 @@ setInterval(() => {
   for (const name of expired) watched.delete(name);
   syncDesired(); // les chaînes marquées sont de nouveau rejointes
   saveChannels();
-  log.log(`[app] Marques « vu » remises à zéro (${expired.length})`);
+  log.log(`[app] Marques « fini » remises à zéro (${expired.length})`);
 }, 60_000).unref();
 
 // Ajoute ou retire des chaînes d'un groupe : { "channels": [...], "group": "24h", "member": true|false }
@@ -1299,6 +1309,9 @@ const server = app.listen(Number(PORT), HOST, () => {
   dormant.track([...saved]);
   setTimeout(() => dormant.checkVods([...saved], settings.dormantDays), 60_000).unref();
   setInterval(() => dormant.checkVods([...saved], settings.dormantDays), 24 * 3600_000).unref();
+  // Images de profil : au démarrage puis toutes les 6 h (chaque chaîne revérifiée au plus une fois par semaine)
+  avatars.refresh([...saved]);
+  setInterval(() => avatars.refresh([...saved]), 6 * 3600_000).unref();
   backupChannels("démarrage");
 });
 

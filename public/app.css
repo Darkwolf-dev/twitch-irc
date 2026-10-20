@@ -587,3 +587,7 @@ li.off .avatar { opacity: .6; }
 @media (max-width: 600px) {
   #channels .avatar { display: none; } /* place gardée pour le nom sur téléphone */
 }
+
+/* Image de profil Twitch par-dessus l'initiale (qui reste visible si l'image manque) */
+.avatar { position: relative; overflow: hidden; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
