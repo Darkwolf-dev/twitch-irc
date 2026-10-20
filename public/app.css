@@ -276,8 +276,10 @@ li .head .open:hover { color: var(--accent-text); text-decoration: underline; }
 #channels li.idle .avatar { filter: grayscale(1); opacity: .45; }
 #channels li.idle .head .open { color: var(--muted); font-weight: 500; }
 li .live-line, li .last, li .last-live { font-size: 12.5px; font-weight: 400; color: var(--muted); }
-li .live-line strong, li .last strong { font-weight: 600; color: var(--text); }
-li.off .last strong, li.off .live-line strong { color: var(--muted); }
+li .last strong { font-weight: 600; color: var(--text); }
+li.off .last strong { color: var(--muted); }
+/* Jeu en cours : discret (gris, à peine plus marqué que le titre) */
+li .live-game { font-weight: 600; }
 
 li .head .tag { flex: none; }
 .tag {
@@ -540,7 +542,7 @@ button.star.big.is-fav { color: var(--star); border-color: var(--star); }
   }
   .sort-select option { color: var(--text); background: var(--surface); }
   li .detail .label { display: none; } /* état : pastille de couleur seule (texte au survol / dans la fiche) */
-  li .live-line { display: none; }      /* titre du live : visible dans la fiche */
+  li .live-title { display: none; }     /* titre du live : visible dans la fiche ; le jeu reste affiché */
   /* Commandes en ligne réservées à l'ordinateur ; sur téléphone, tout se règle dans la fiche */
   .desktop-only { display: none; }
   li .head .tag { pointer-events: none; }

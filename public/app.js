@@ -471,7 +471,8 @@ function renderChannel(channel) {
   const liveLine = channel.live && el("span", {
     class: "live-line",
     title: `${channel.live.game} — ${channel.live.title}`,
-  }, el("strong", {}, channel.live.game || "Sans catégorie"), ` · ${channel.live.title}`);
+  }, el("span", { class: "live-game" }, channel.live.game || "Sans catégorie"),
+  el("span", { class: "live-title" }, ` · ${channel.live.title}`));
 
   // Ligne 2 bis (hors live) : date du dernier live connu
   const lastLiveLine = !channel.live && channel.lastLive && el("span", {
