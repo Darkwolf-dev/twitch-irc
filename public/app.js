@@ -1219,7 +1219,7 @@ function dropItem(c, actions) {
   return el("li", {},
     el("div", { class: "drops-msg" },
       el("strong", {}, c.user), " ", c.text,
-      el("span", { class: "hint" }, `#${c.channel} · ${shortDate(c.at)} · ${liveMoment(c.minute)}${c.auto ? " · classé d'office" : ""}`)),
+      el("span", { class: "hint" }, `#${c.channel} · ${shortDate(c.at)} · ${liveMoment(c.minute)}${c.viewers ? ` · ${c.viewers} viewers` : ""}${c.auto ? " · classé d'office" : ""}`)),
     el("div", { class: "drops-actions" }, ...actions));
 }
 
@@ -1262,6 +1262,7 @@ async function openDrops() {
     $("drops-ranking").replaceChildren(...(ranked.length ? ranked.map((c) => el("tr", {},
       el("td", {}, el("strong", {}, c.channel)),
       el("td", {}, String(c.drops)),
+      el("td", {}, String(c.boosters)),
       el("td", {}, `${c.presenceHours} h`),
       el("td", {}, c.perHour === null ? "–" : String(c.perHour)),
       el("td", {
@@ -1269,12 +1270,12 @@ async function openDrops() {
           + (c.medianMinute !== null ? `\nMoment médian : ${liveMoment(c.medianMinute)}` : ""),
       }, momentBars(c)),
       el("td", {}, c.lastAt ? shortDate(c.lastAt) : "–")))
-      : [el("tr", {}, el("td", { colspan: "6", class: "hint" }, "Pas encore de données : le radar se remplit pendant que Twitch Deck est dans les chats en live."))]));
+      : [el("tr", {}, el("td", { colspan: "7", class: "hint" }, "Pas encore de données : le radar se remplit pendant que Twitch Deck est dans les chats en live."))]));
 
     $("drops-recent").replaceChildren(...(d.recent.length ? d.recent.map((c) => dropItem(c, [
-      el("span", { class: "hint" }, c.drop ? "✓ drop" : "✗ non"),
+      el("span", { class: "hint" }, c.drop ? `✓ ${c.boosters ?? "?"} booster(s)` : "✗ non"),
       el("button", { type: "button", class: "ghost small", title: "Remettre à valider", onclick: () => dropVerdict(c.id, null) }, "↺"),
-    ])) : [el("li", { class: "hint" }, "Aucun message validé.")]));
+    ])) : [el("li", { class: "hint" }, "Aucun drop repéré pour l'instant.")]));
   } catch (err) {
     if (err.message !== "auth") $("drops-pending").replaceChildren(el("li", { class: "error" }, err.message));
   }
