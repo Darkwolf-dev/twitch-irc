@@ -265,10 +265,11 @@ const statusRank = (c) =>
   c.live ? (c.watched ? 2 : c.enabled ? 0 : 1) : c.state === "joined" || c.state === "joining" ? 3 : 4;
 const byName = (a, b) => a.name.localeCompare(b.name);
 // Un favori marqué « vu » perd sa priorité jusqu'à 2 h
-const priority = (c) => c.favorite && !c.watched;
+const priority = (c) => Boolean(c.favorite && !c.watched);
 const SORTS = {
-  // favoris, puis statut, puis nom
-  status: (a, b) => (priority(b) - priority(a)) || (statusRank(a) - statusRank(b)) || byName(a, b),
+  // lives d'abord ; dans chaque bloc (live / hors live) les favoris en tête, puis statut, puis nom
+  status: (a, b) => (Boolean(b.live) - Boolean(a.live)) || (priority(b) - priority(a)) ||
+    (statusRank(a) - statusRank(b)) || byName(a, b),
   // lives du plus gros au plus petit (les chaînes « vu » après), puis les autres par nom
   viewers: (a, b) => (a.watched - b.watched) || ((b.live?.viewers ?? -1) - (a.live?.viewers ?? -1)) || byName(a, b),
   name: byName,
