@@ -367,9 +367,6 @@ function render() {
   if (dialog.name) renderDialogHeader();
   renderAddButton();
   renderTokenBanner(lastStatus.token);
-  const pendingDrops = lastStatus.drops?.pending ?? 0;
-  $("drops-badge").hidden = !pendingDrops;
-  $("drops-badge").textContent = String(pendingDrops);
 
   const shown = visibleChannels();
   const scope = scopeLabel();
@@ -1215,22 +1212,12 @@ const shortDate = (iso) => new Date(iso).toLocaleString([], { day: "2-digit", mo
 const liveMoment = (minute) => minute === null ? "hors live"
   : minute < 60 ? `${minute} min de live` : `${Math.floor(minute / 60)} h ${String(minute % 60).padStart(2, "0")} de live`;
 
-function dropItem(c, actions) {
+function dropItem(d) {
   return el("li", {},
     el("div", { class: "drops-msg" },
-      el("strong", {}, c.user), " ", c.text,
-      el("span", { class: "hint" }, `#${c.channel} · ${shortDate(c.at)} · ${liveMoment(c.minute)}${c.viewers ? ` · ${c.viewers} viewers` : ""}${c.auto ? " · classé d'office" : ""}`)),
-    el("div", { class: "drops-actions" }, ...actions));
-}
-
-async function dropVerdict(id, drop) {
-  try {
-    await api("/drops/verdict", { id, drop });
-    await openDrops();
-    refresh();
-  } catch (err) {
-    showError(err);
-  }
+      el("strong", {}, d.channel), " ", d.text,
+      el("span", { class: "hint" }, `${shortDate(d.at)} · ${liveMoment(d.minute)}${d.viewers ? ` · ${d.viewers} viewers` : ""}`)),
+    el("span", { class: "hint drops-actions" }, `${d.boosters ?? "?"} booster(s)`));
 }
 
 function momentBars(c) {
@@ -1246,18 +1233,12 @@ function momentBars(c) {
 
 async function openDrops() {
   if (!$("drops-dialog").open) {
-    $("drops-pending").replaceChildren(el("li", { class: "hint" }, "Chargement…"));
+    $("drops-recent").replaceChildren(el("li", { class: "hint" }, "Chargement…"));
     $("drops-dialog").showModal();
     document.querySelector("#drops-dialog .dlg").focus();
   }
   try {
     const d = await api("/drops");
-    $("drops-pending-count").textContent = d.pending.length ? `(${d.pending.length})` : "";
-    $("drops-pending").replaceChildren(...(d.pending.length ? d.pending.map((c) => dropItem(c, [
-      el("button", { type: "button", class: "small", onclick: () => dropVerdict(c.id, true) }, "✓ Drop"),
-      el("button", { type: "button", class: "ghost small", onclick: () => dropVerdict(c.id, false) }, "✗ Non"),
-    ])) : [el("li", { class: "hint" }, "Rien à valider pour l'instant.")]));
-
     const ranked = d.channels.filter((c) => c.drops || c.presenceHours);
     $("drops-ranking").replaceChildren(...(ranked.length ? ranked.map((c) => el("tr", {},
       el("td", {}, el("strong", {}, c.channel)),
@@ -1272,12 +1253,10 @@ async function openDrops() {
       el("td", {}, c.lastAt ? shortDate(c.lastAt) : "–")))
       : [el("tr", {}, el("td", { colspan: "7", class: "hint" }, "Pas encore de données : le radar se remplit pendant que Twitch Deck est dans les chats en live."))]));
 
-    $("drops-recent").replaceChildren(...(d.recent.length ? d.recent.map((c) => dropItem(c, [
-      el("span", { class: "hint" }, c.drop ? `✓ ${c.boosters ?? "?"} booster(s)` : "✗ non"),
-      el("button", { type: "button", class: "ghost small", title: "Remettre à valider", onclick: () => dropVerdict(c.id, null) }, "↺"),
-    ])) : [el("li", { class: "hint" }, "Aucun drop repéré pour l'instant.")]));
+    $("drops-recent").replaceChildren(...(d.recent.length ? d.recent.map(dropItem)
+      : [el("li", { class: "hint" }, "Aucun drop repéré pour l'instant.")]));
   } catch (err) {
-    if (err.message !== "auth") $("drops-pending").replaceChildren(el("li", { class: "error" }, err.message));
+    if (err.message !== "auth") $("drops-recent").replaceChildren(el("li", { class: "error" }, err.message));
   }
 }
 

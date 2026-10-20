@@ -2,20 +2,14 @@
 
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 
 const KEEP_MS = 30 * 24 * 60 * 60_000;
-const MAX_CANDIDATES = 2000;
+const MAX_DROPS = 2000;
 const PRESENCE_TICK_MS = 60_000;
-// Annonce de drop ChatDeck, envoyée par ChatDeck depuis le compte du streamer :
+// Annonce de drop ChatDeck, toujours postée depuis le compte du streamer :
 // « 🎁 Drop ChatDeck : 782 viewers présents reçoivent 3 boosters Berlu, distribués par paliers sur 3 min → … »
 const ANNOUNCE_RE = /🎁\s*Drop ChatDeck/i;
 const DETAILS_RE = /(\d[\d\s  .]*)\s*viewers?\b.*?\b(\d+)\s*boosters?\s+([^,→]+)/i;
-// Annonce venant d'un autre compte que le streamer (relais, copie) : à valider dans le panneau.
-// Un expéditeur dont 2 annonces ont été validées (90 % des siennes) est ensuite validé d'office ;
-// un expéditeur dont 2 annonces ont été écartées (et aucune validée) est écarté d'office.
-const AUTO_MIN = 2;
-const AUTO_RATIO = 0.9;
 // Moments du live où les drops tombent (minutes depuis le début)
 const MOMENTS = [
   { label: "< 30 min", max: 30 },
@@ -27,7 +21,7 @@ const MOMENTS = [
 
 const day = (t) => new Date(t).toISOString().slice(0, 10);
 // Boosters d'un drop (1 si le message n'a pas pu être lu)
-const boostersOf = (c) => c.boosters ?? 1;
+const boostersOf = (d) => d.boosters ?? 1;
 
 // Radar à drops : repère les annonces dans les chats rejoints, puis classe les chaînes
 // selon les boosters gagnés par heure de présence pendant le live.
@@ -37,13 +31,11 @@ class DropTracker {
     this.getLive = getLive;   // () => Map chaîne -> { startedAt }
     this.isJoined = isJoined; // (chaîne) => true si le chat est rejoint
     this.log = log;
-    // { id, at, channel, user, login, text, minute, viewers, boosters, collection, drop: null | true | false, auto }
-    this.candidates = [];
+    this.drops = [];          // { at, channel, text, minute, viewers, boosters, collection }
     this.presence = {};       // chaîne -> { "AAAA-MM-JJ": minutes passées dans le chat pendant le live }
     try {
       const data = JSON.parse(fs.readFileSync(this.file, "utf8"));
-      // Les messages repérés par l'ancienne détection large (sans « 🎁 Drop ChatDeck ») sont oubliés
-      this.candidates = (data.candidates ?? []).filter((c) => ANNOUNCE_RE.test(c.text));
+      this.drops = data.drops ?? [];
       this.presence = data.presence ?? {};
     } catch {}
     this.dirty = false;
@@ -57,55 +49,26 @@ class DropTracker {
     clearInterval(this.timer);
   }
 
-  handle(message, me) {
-    if (message.login === me || !ANNOUNCE_RE.test(message.text)) return;
+  handle(message) {
+    // Seul le streamer poste les vraies annonces : une copie par un viewer est ignorée
+    if (message.login !== message.channel || !ANNOUNCE_RE.test(message.text)) return;
     const startedAt = this.getLive().get(message.channel)?.startedAt;
     const now = Date.now();
     const details = message.text.match(DETAILS_RE);
-    const fromStreamer = message.login === message.channel;
-    const entry = {
-      id: crypto.randomBytes(6).toString("hex"),
+    const drop = {
       at: new Date(now).toISOString(),
       channel: message.channel,
-      user: message.user,
-      login: message.login,
       text: message.text.slice(0, 300),
       minute: startedAt ? Math.max(0, Math.round((now - Date.parse(startedAt)) / 60_000)) : null,
       viewers: details ? Number(details[1].replace(/\D/g, "")) : null,
       boosters: details ? Number(details[2]) : null,
       collection: details ? details[3].trim().slice(0, 40) : null,
-      drop: fromStreamer ? true : this.autoVerdict(message.login, message.channel),
     };
-    entry.auto = entry.drop !== null;
-    this.candidates.push(entry);
-    if (this.candidates.length > MAX_CANDIDATES) this.candidates.splice(0, this.candidates.length - MAX_CANDIDATES);
-    this.dirty = true;
-    if (entry.drop) {
-      this.log.log(`[drops] Drop sur #${entry.channel}${entry.boosters ? ` : ${entry.boosters} booster(s) ${entry.collection}` : ""}`);
-    }
-  }
-
-  autoVerdict(login, channel) {
-    let yes = 0, no = 0;
-    for (const c of this.candidates) {
-      if (c.login !== login || c.channel !== channel || c.drop === null || c.auto) continue;
-      if (c.drop) yes++;
-      else no++;
-    }
-    if (yes >= AUTO_MIN && yes / (yes + no) >= AUTO_RATIO) return true;
-    if (no >= AUTO_MIN && yes === 0) return false;
-    return null;
-  }
-
-  // drop : true, false, ou null (annule la validation)
-  setVerdict(id, drop) {
-    const entry = this.candidates.find((c) => c.id === id);
-    if (!entry) return false;
-    entry.drop = drop;
-    entry.auto = false;
+    this.drops.push(drop);
+    if (this.drops.length > MAX_DROPS) this.drops.splice(0, this.drops.length - MAX_DROPS);
     this.dirty = true;
     this.save();
-    return true;
+    this.log.log(`[drops] Drop sur #${drop.channel}${drop.boosters ? ` : ${drop.boosters} booster(s) ${drop.collection}` : ""}`);
   }
 
   tick() {
@@ -123,9 +86,9 @@ class DropTracker {
       for (const d of Object.keys(days)) if (d < oldest) delete days[d];
       if (!Object.keys(days).length) delete this.presence[channel];
     }
-    const before = this.candidates.length;
-    this.candidates = this.candidates.filter((c) => now - Date.parse(c.at) < KEEP_MS);
-    if (this.candidates.length !== before) this.dirty = true;
+    const before = this.drops.length;
+    this.drops = this.drops.filter((d) => now - Date.parse(d.at) < KEEP_MS);
+    if (this.drops.length !== before) this.dirty = true;
     this.save();
   }
 
@@ -133,7 +96,7 @@ class DropTracker {
     if (!this.dirty) return;
     try {
       const tmp = this.file + ".tmp";
-      fs.writeFileSync(tmp, JSON.stringify({ candidates: this.candidates, presence: this.presence }));
+      fs.writeFileSync(tmp, JSON.stringify({ drops: this.drops, presence: this.presence }));
       fs.renameSync(tmp, this.file);
       this.dirty = false;
     } catch (err) {
@@ -149,16 +112,14 @@ class DropTracker {
   // ne passe pas en tête. Calculé en une passe : sert au tri des chaînes à rejoindre.
   scores() {
     const boosters = new Map();
-    for (const c of this.candidates) {
-      if (c.drop === true) boosters.set(c.channel, (boosters.get(c.channel) ?? 0) + boostersOf(c));
-    }
+    for (const d of this.drops) boosters.set(d.channel, (boosters.get(d.channel) ?? 0) + boostersOf(d));
     const scores = new Map();
     for (const [channel, count] of boosters) scores.set(channel, count / (this.presenceMinutes(channel) / 60 + 2));
     return scores;
   }
 
   channelReport(channel) {
-    const drops = this.candidates.filter((c) => c.channel === channel && c.drop === true);
+    const drops = this.drops.filter((d) => d.channel === channel);
     const minutes = this.presenceMinutes(channel);
     const boosters = drops.reduce((n, d) => n + boostersOf(d), 0);
     const moments = MOMENTS.map((m) => ({ label: m.label, count: 0 }));
@@ -177,18 +138,13 @@ class DropTracker {
   }
 
   report() {
-    const channels = new Set([...Object.keys(this.presence), ...this.candidates.map((c) => c.channel)]);
+    const channels = new Set([...Object.keys(this.presence), ...this.drops.map((d) => d.channel)]);
     const scores = this.scores();
     return {
       channels: [...channels].map((c) => ({ ...this.channelReport(c), score: scores.get(c) ?? 0 }))
         .sort((a, b) => b.score - a.score || b.presenceHours - a.presenceHours),
-      pending: this.candidates.filter((c) => c.drop === null).slice(-50).reverse(),
-      recent: this.candidates.filter((c) => c.drop !== null).slice(-30).reverse(),
+      recent: this.drops.slice(-30).reverse(),
     };
-  }
-
-  pendingCount() {
-    return this.candidates.reduce((n, c) => n + (c.drop === null), 0);
   }
 }
 

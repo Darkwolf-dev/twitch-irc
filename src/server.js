@@ -187,7 +187,7 @@ const irc = new TwitchIrc({
   onSanction: (sanction) => recordSanction(sanction),
   onMessage: (message) => {
     stats.countMessage(message.channel);
-    drops.handle(message, irc.username);
+    drops.handle(message);
     notifier.handle(message);
   },
   log,
@@ -540,7 +540,6 @@ function fullStatus() {
   };
   status.live = live.status();
   status.token = tokens.status();
-  status.drops = { pending: drops.pendingCount() };
 
   const sizes = new Map();
   for (const set of groups.values()) for (const g of set) sizes.set(g, (sizes.get(g) ?? 0) + 1);
@@ -1119,17 +1118,6 @@ app.post("/auth/device", async (req, res) => {
 
 app.get("/drops", (req, res) => {
   res.json(drops.report());
-});
-
-// { "id": "<12 caractères>", "drop": true | false | null }
-app.post("/drops/verdict", (req, res) => {
-  const { id, drop } = req.body ?? {};
-  if (typeof id !== "string" || !/^[0-9a-f]{12}$/.test(id) || ![true, false, null].includes(drop)) {
-    return res.status(400).json({ error: `Fournir "id" et "drop" (true, false ou null)` });
-  }
-  if (!drops.setVerdict(id, drop)) return res.status(404).json({ error: "Message introuvable" });
-  syncDesired();
-  res.json({ ok: true });
 });
 
 // --- Pause de l'IRC : { "paused": true } quitte tous les chats et coupe la connexion ---
