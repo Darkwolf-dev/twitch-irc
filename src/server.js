@@ -51,17 +51,32 @@ const secureCookie = COOKIE_SECURE !== "false";
 
 // --- État des chaînes ---
 // Format du fichier :
-// { "channels": [{ "name": "x", "enabled": true, "liveOnly": false, "favorite": false, "groups": ["24h"] }, …] }
+// { "channels": [{ "name": "x", "enabled": true, "liveOnly": false, "favorite": false, "groups": ["24h"], "watchedAt": null }, …] }
 // (l'ancien format { "channels": ["x", …] } est lu comme « tout activé »)
 //
-// enabled  : l'interrupteur de la chaîne
-// liveOnly : si activée, on ne rejoint le chat que pendant le live
+// enabled   : l'interrupteur de la chaîne
+// liveOnly  : si activée, on ne rejoint le chat que pendant le live
+// watchedAt : « assez regardée aujourd'hui », remis à zéro chaque jour à 2 h
 
 const saved = new Set();
 const enabled = new Set();
 const liveOnly = new Set();
 const favorites = new Set();
 const groups = new Map(); // chaîne -> Set des groupes
+const watched = new Map(); // chaîne -> date du marquage (ISO)
+
+// Une « journée de visionnage » va de 2 h à 2 h (heure de Paris) : deux dates
+// sont dans la même journée si elles tombent le même jour une fois reculées de 2 h.
+const WATCH_RESET_HOUR = 2;
+const WATCH_TIME_ZONE = "Europe/Paris";
+function watchDay(at) {
+  return new Intl.DateTimeFormat("fr-CA", { timeZone: WATCH_TIME_ZONE })
+    .format(new Date(new Date(at).getTime() - WATCH_RESET_HOUR * 3600_000));
+}
+function isWatched(name) {
+  const at = watched.get(name);
+  return Boolean(at) && watchDay(at) === watchDay(Date.now());
+}
 
 function normalizeGroup(value) {
   if (typeof value !== "string") return null;
@@ -90,6 +105,7 @@ function saveChannels() {
     liveOnly: liveOnly.has(name),
     favorite: favorites.has(name),
     groups: groupsOf(name),
+    watchedAt: isWatched(name) ? watched.get(name) : null,
   }));
   const tmp = CHANNELS_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify({ channels }, null, 2));
@@ -126,6 +142,7 @@ for (const channel of loadChannels()) {
   if (channel.enabled) enabled.add(name);
   if (channel.liveOnly) liveOnly.add(name);
   if (channel.favorite) favorites.add(name);
+  if (channel.watchedAt && !Number.isNaN(Date.parse(channel.watchedAt))) watched.set(name, channel.watchedAt);
   const channelGroups = (channel.groups ?? []).map(normalizeGroup).filter(Boolean);
   if (channelGroups.length) groups.set(name, new Set(channelGroups));
 }
@@ -320,11 +337,13 @@ function saveSettings() {
 // d'abord les chaînes « toujours » (favoris en tête), puis celles « si live »
 // actuellement en live (favoris, puis plus gros lives).
 function syncDesired() {
-  const always = [...enabled]
+  // Une chaîne marquée « vu » n'est plus rejointe jusqu'à la remise à zéro de 2 h
+  const candidates = [...enabled].filter((n) => !isWatched(n));
+  const always = candidates
     .filter((n) => !liveOnly.has(n))
     .sort((a, b) => (favorites.has(b) - favorites.has(a)) || a.localeCompare(b));
   const open = scheduleOpen();
-  const whenLive = [...enabled]
+  const whenLive = candidates
     .filter((n) => open && liveOnly.has(n) && live.isActive(n))
     .sort((a, b) =>
       (favorites.has(b) - favorites.has(a)) ||
@@ -440,7 +459,8 @@ setInterval(syncDesired, 30_000).unref(); // fait expirer le délai de grâce ap
 function channelInfo(name) {
   const info = irc.channelInfo(name);
   if (enabled.has(name) && !irc.desired.has(name)) {
-    info.state = !liveOnly.has(name) ? "full"
+    info.state = isWatched(name) ? "watched"
+      : !liveOnly.has(name) ? "full"
       : !live.isActive(name) ? "offline"
       : !scheduleOpen() ? "schedule"
       : "full";
@@ -454,6 +474,7 @@ function channelInfo(name) {
     sanction: activeSanction(name),
     favorite: favorites.has(name),
     groups: groupsOf(name),
+    watched: isWatched(name),
   };
 }
 
@@ -1135,6 +1156,7 @@ app.post("/channels/remove", (req, res) => {
     liveOnly.delete(name);
     favorites.delete(name);
     groups.delete(name);
+    watched.delete(name);
     stats.forget(name);
     dormant.forget(name);
   }
@@ -1159,6 +1181,35 @@ app.post("/channels/favorite", (req, res) => {
   }
   res.json({ ok: true, channels: commit(names) });
 });
+
+// Marque une chaîne comme assez regardée aujourd'hui : { "channels": [...], "watched": true|false }
+// Tant qu'elle est marquée, la chaîne n'est plus rejointe. Les marques tombent d'elles-mêmes à 2 h (voir watchDay).
+app.post("/channels/watched", (req, res) => {
+  const { names, error } = readChannels(req.body);
+  if (error) return res.status(400).json({ error });
+  if (typeof req.body.watched !== "boolean") {
+    return res.status(400).json({ error: `"watched" doit valoir true ou false` });
+  }
+  const unknown = names.filter((name) => !saved.has(name));
+  if (unknown.length) return res.status(404).json({ error: `Chaîne non enregistrée : ${unknown.join(", ")}` });
+
+  const at = new Date().toISOString();
+  for (const name of names) {
+    if (req.body.watched) watched.set(name, at);
+    else watched.delete(name);
+  }
+  res.json({ ok: true, channels: commit(names) });
+});
+
+// Remise à zéro quotidienne : oublie les marques d'avant 2 h et le note au journal
+setInterval(() => {
+  const expired = [...watched.keys()].filter((name) => !isWatched(name));
+  if (!expired.length) return;
+  for (const name of expired) watched.delete(name);
+  syncDesired(); // les chaînes marquées sont de nouveau rejointes
+  saveChannels();
+  log.log(`[app] Marques « vu » remises à zéro (${expired.length})`);
+}, 60_000).unref();
 
 // Ajoute ou retire des chaînes d'un groupe : { "channels": [...], "group": "24h", "member": true|false }
 // Un groupe existe tant qu'il contient au moins une chaîne.

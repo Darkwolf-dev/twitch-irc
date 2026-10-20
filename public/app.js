@@ -12,11 +12,13 @@ const LABELS = {
   offline: "attend le live",
   full: "limite atteinte",
   schedule: "hors plage horaire",
+  watched: "vu, quitté",
 };
 const STATE_HINTS = {
   offline: "Mode « si live » : le chat sera rejoint au début du prochain live",
   full: "Plafond de chats simultanés atteint (réglable dans Réglages)",
   schedule: "En live, mais en dehors de la plage horaire (réglable dans Réglages)",
+  watched: "Assez regardée aujourd'hui : chat quitté jusqu'à 2 h",
 };
 
 let secret = null;
@@ -257,14 +259,18 @@ function visibleChannels() {
     .sort(SORTS[$("sort").value] ?? SORTS.status);
 }
 
-// Rang « statut » : en live, puis chats rejoints hors live, puis le reste
-const statusRank = (c) => (c.live ? 0 : c.state === "joined" || c.state === "joining" ? 1 : 2);
+// Rang « statut » : en live et activées, en live désactivées, en live marquées « vu »,
+// chats rejoints hors live, puis le reste
+const statusRank = (c) =>
+  c.live ? (c.watched ? 2 : c.enabled ? 0 : 1) : c.state === "joined" || c.state === "joining" ? 3 : 4;
 const byName = (a, b) => a.name.localeCompare(b.name);
+// Un favori marqué « vu » perd sa priorité jusqu'à 2 h
+const priority = (c) => c.favorite && !c.watched;
 const SORTS = {
   // favoris, puis statut, puis nom
-  status: (a, b) => (b.favorite - a.favorite) || (statusRank(a) - statusRank(b)) || byName(a, b),
-  // lives du plus gros au plus petit, puis les autres par nom
-  viewers: (a, b) => ((b.live?.viewers ?? -1) - (a.live?.viewers ?? -1)) || byName(a, b),
+  status: (a, b) => (priority(b) - priority(a)) || (statusRank(a) - statusRank(b)) || byName(a, b),
+  // lives du plus gros au plus petit (les chaînes « vu » après), puis les autres par nom
+  viewers: (a, b) => (a.watched - b.watched) || ((b.live?.viewers ?? -1) - (a.live?.viewers ?? -1)) || byName(a, b),
   name: byName,
   // dernier message reçu le plus récent en premier, les chats muets à la fin
   activity: (a, b) =>
@@ -353,6 +359,17 @@ function renderChannel(channel) {
     onclick: () => act("/channels/favorite", [channel.name], { favorite: !channel.favorite }),
   }, channel.favorite ? "★" : "☆");
 
+  const seen = el("button", {
+    class: `seen${channel.watched ? " is-seen" : ""}`,
+    disabled: isBusy,
+    "aria-pressed": String(channel.watched),
+    "aria-label": `${channel.name} assez regardée aujourd'hui`,
+    title: channel.watched
+      ? "Assez regardée aujourd'hui : chat quitté et chaîne reléguée jusqu'à 2 h (clic : annuler)"
+      : "Assez regardée aujourd'hui : quitter le chat et la reléguer en bas jusqu'à 2 h",
+    onclick: () => act("/channels/watched", [channel.name], { watched: !channel.watched }),
+  }, "✓");
+
   const box = el("input", {
     type: "checkbox",
     role: "switch",
@@ -384,6 +401,7 @@ function renderChannel(channel) {
     }, channel.name),
     badge,
     sanction,
+    channel.watched && el("span", { class: "seen-badge", title: "Assez regardée aujourd'hui : chat quitté jusqu'à 2 h" }, "vu"),
     el("a", {
       class: "twitch-link",
       href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
@@ -468,29 +486,48 @@ function renderChannel(channel) {
       : STATE_HINTS[channel.state] ?? "",
   }, el("span", { class: "dot", "aria-hidden": "true" }), el("span", { class: "label" }, LABELS[channel.state] || channel.state));
 
-  return el("li", { class: channel.enabled ? "on" : "off" }, star, toggle, name, state, remove);
+  const classes = [channel.enabled ? "on" : "off", channel.watched && "watched", dialog.name === channel.name && "selected"];
+  return el("li", { class: classes.filter(Boolean).join(" ") },
+    star, seen, toggle, avatar(channel), name, state, remove);
+}
+
+// Pastille à l'initiale de la chaîne, teinte stable dérivée du nom, anneau rouge pendant le live
+function avatar(channel) {
+  let hash = 0;
+  for (const ch of channel.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const node = el("span", { class: `avatar${channel.live ? " is-live" : ""}`, "aria-hidden": "true" },
+    channel.name[0].toUpperCase());
+  node.style.setProperty("--hue", String(hash % 360)); // CSSOM : autorisé par la CSP
+  return node;
 }
 
 // --- Fiche d'une chaîne : chat, stats, réglages ---
 
-const dialog = { name: null, tab: "chat", lastId: 0, timer: null, statsFor: null };
+const dialog = { name: null, tab: "settings", lastId: 0, timer: null, statsFor: null };
+
+// Écran large : la fiche s'ouvre en panneau à droite, la liste reste utilisable à côté
+const wideScreen = matchMedia("(min-width: 1100px)");
 
 function channelByName(name) {
   return lastStatus?.channels.find((c) => c.name === name) ?? null;
 }
 
-function openChannel(name, tab = "chat") {
+function openChannel(name, tab = dialog.name ? dialog.tab : "settings") {
   dialog.name = name;
   dialog.lastId = 0;
   dialog.statsFor = null;
   $("chat-log").replaceChildren();
   renderDialogHeader();
   showTab(tab);
-  if (!$("channel-dialog").open) {
-    $("channel-dialog").showModal();
+  const box = $("channel-dialog");
+  if (!box.open) {
+    if (wideScreen.matches) box.show();
+    else box.showModal();
     // Focus sur la fiche elle-même plutôt que sur le premier lien (pas de cadre de focus parasite)
     document.querySelector("#channel-dialog .dlg").focus();
   }
+  document.body.classList.toggle("panel-open", !box.matches(":modal"));
+  render();
 }
 
 function closeChannel() {
@@ -720,7 +757,21 @@ function renderChannelSettings(channel) {
   const datalist = el("datalist", { id: "group-list" },
     ...lastStatus.groups.map((g) => el("option", { value: g.name })));
 
+  // Aperçu du live en cours (le détail sur 7 jours est dans l'onglet Stats)
+  const last = channel.lastMessage;
+  const tile = (value, label) => el("div", { class: "tile" },
+    el("span", { class: "tile-value" }, value), el("span", { class: "tile-label" }, label));
+  const overview = channel.live
+    ? el("div", { class: "tiles" },
+      tile(viewers.format(channel.live.viewers), "spectateurs"),
+      tile(formatDuration(channel.live.startedAt), "en live depuis"),
+      tile(last ? formatAge(last.ageSeconds).replace("il y a ", "") : "—", "dernier message"))
+    : el("p", { class: "hint overview-off" }, channel.lastLive
+      ? `Hors live · dernier live ${formatLastLive(channel.lastLive)}`
+      : "Hors live");
+
   box.replaceChildren(
+    overview,
     el("div", { class: "field" },
       el("span", { class: "field-label" }, "Activée"),
       el("label", { class: "switch" },
@@ -737,6 +788,14 @@ function renderChannelSettings(channel) {
         "aria-pressed": String(channel.favorite),
         onclick: () => run("/channels/favorite", { favorite: !channel.favorite }),
       }, channel.favorite ? "★ favori" : "☆ ajouter aux favoris")),
+    el("div", { class: "field" },
+      el("span", { class: "field-label" }, "Assez regardée aujourd'hui"),
+      el("button", {
+        type: "button", class: `seen big${channel.watched ? " is-seen" : ""}`, disabled: isBusy,
+        "aria-pressed": String(channel.watched),
+        title: "Quitte le chat et relègue la chaîne en bas de la liste. Remise à zéro chaque jour à 2 h",
+        onclick: () => run("/channels/watched", { watched: !channel.watched }),
+      }, channel.watched ? "✓ vu jusqu'à 2 h" : "marquer comme vu")),
     el("div", { class: "field column" },
       el("span", { class: "field-label" }, "Quand rejoindre le chat"),
       el("div", { class: "segmented" }, modeBtn(false, "Toujours"), modeBtn(true, "Seulement en live"))),
@@ -1267,6 +1326,12 @@ $("dlg-close").addEventListener("click", closeChannel);
 $("channel-dialog").addEventListener("close", () => {
   clearInterval(dialog.timer);
   dialog.name = null;
+  document.body.classList.remove("panel-open");
+  render();
+});
+// En panneau (non modal), Échap ne ferme pas la fiche d'elle-même
+$("channel-dialog").addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("channel-dialog").matches(":modal")) closeChannel();
 });
 // Clic sur le fond assombri : fermer
 $("channel-dialog").addEventListener("click", (e) => {

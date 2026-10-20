@@ -23,7 +23,7 @@
 </div>
 <main>
   <header>
-    <h1>Twitch IRC Manager</h1>
+    <h1><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>IRC Manager</h1>
     <div class="who">
       <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
       <div class="account" id="account" hidden>
@@ -147,10 +147,10 @@
           <button type="button" id="settings-close" class="close" aria-label="Fermer">×</button>
         </div>
         <div class="tabs scroller" role="tablist">
-          <button type="button" role="tab" data-stab="general">⚙ Général</button>
-          <button type="button" role="tab" data-stab="notifs">🔔 Notifications</button>
-          <button type="button" role="tab" data-stab="list">🧹 Liste</button>
-          <button type="button" role="tab" data-stab="security">🔐 Sécurité <span id="sanctions-count"></span></button>
+          <button type="button" role="tab" data-stab="general">Général</button>
+          <button type="button" role="tab" data-stab="notifs">Notifications</button>
+          <button type="button" role="tab" data-stab="list">Liste</button>
+          <button type="button" role="tab" data-stab="security">Sécurité <span id="sanctions-count"></span></button>
         </div>
 
         <div id="stab-general" class="tab-panel settings-tab" role="tabpanel">
@@ -293,16 +293,16 @@
       <button type="button" id="dlg-close" class="close" aria-label="Fermer">×</button>
     </div>
     <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="chat">💬 Chat</button>
-      <button type="button" role="tab" data-tab="stats">📊 Stats</button>
-      <button type="button" role="tab" data-tab="settings">⚙ Réglages</button>
+      <button type="button" role="tab" data-tab="settings">Aperçu</button>
+      <button type="button" role="tab" data-tab="stats">Stats 7 jours</button>
+      <button type="button" role="tab" data-tab="chat">Chat</button>
     </div>
-    <div id="tab-chat" class="tab-panel" role="tabpanel">
+    <div id="tab-settings" class="tab-panel" role="tabpanel"></div>
+    <div id="tab-stats" class="tab-panel" role="tabpanel" hidden></div>
+    <div id="tab-chat" class="tab-panel" role="tabpanel" hidden>
       <p id="chat-note" class="hint" hidden></p>
       <ol id="chat-log" class="chat-log" aria-live="polite"></ol>
     </div>
-    <div id="tab-stats" class="tab-panel" role="tabpanel" hidden></div>
-    <div id="tab-settings" class="tab-panel" role="tabpanel" hidden></div>
   </div>
 </dialog>
 
