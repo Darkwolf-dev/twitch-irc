@@ -343,11 +343,17 @@
     <div class="tab-panel drops-body">
       <section>
         <h3>Classement · 30 jours</h3>
-        <p class="hint">Drops = annonces « 🎁 Drop ChatDeck » postées par le streamer. Présence = temps passé dans le chat pendant le live, et nombre de jours (dès 10 min). Seules les chaînes rejointes peuvent avoir des drops repérés.</p>
+        <p class="hint">Seules les chaînes rejointes peuvent avoir des drops repérés (légende sous le tableau).</p>
         <div class="drops-table-wrap"><table class="drops-table">
           <thead><tr><th>Chaîne</th><th>Drops</th><th>Boosters</th><th>Présence</th><th>Boosters / jour</th><th>Moment du live</th><th>Dernier</th></tr></thead>
           <tbody id="drops-ranking"></tbody>
         </table></div>
+        <ul class="hint drops-legend">
+          <li><strong>Drops</strong> : annonces « 🎁 Drop ChatDeck » vues sur 30 jours. <strong>Boosters</strong> : total reçu par ces drops.</li>
+          <li><strong>Présence</strong> : heures passées dans le chat pendant le live, et nombre de jours (un jour compte dès 10 min).</li>
+          <li><strong>Boosters / jour</strong> : boosters ÷ jours de présence. C'est ce chiffre qui décide quelles chaînes passent en premier quand le plafond de chats est atteint.</li>
+          <li><strong>Moment du live</strong> : quand les drops tombent, comptés depuis le début du live. 5 barres, de gauche à droite : <em>&lt; 30 min</em>, <em>30 min – 1 h</em>, <em>1 – 2 h</em>, <em>2 – 4 h</em>, <em>&gt; 4 h</em>. Plus la barre est haute, plus il y a eu de drops à ce moment. Survole la case pour le détail. Pour une chaîne 24h/24, tout tombe dans la dernière barre.</li>
+        </ul>
       </section>
       <section>
         <h3>Derniers drops</h3>
