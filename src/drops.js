@@ -72,6 +72,13 @@ class DropTracker {
     this.log.log(`[drops] Drop sur #${drop.channel}${drop.boosters ? ` : ${drop.boosters} booster(s) ${drop.collection}` : ""}`);
   }
 
+  // Drop raté par le radar (pas encore dans le chat…), saisi dans le panneau
+  addManual({ channel, boosters, minute }) {
+    this.drops.push({ at: new Date().toISOString(), channel, text: "Ajouté à la main", minute, viewers: null, boosters, collection: null, manual: true });
+    this.dirty = true;
+    this.save();
+  }
+
   tick() {
     const now = Date.now();
     const today = day(now);

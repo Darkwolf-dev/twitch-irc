@@ -1131,6 +1131,20 @@ app.get("/drops", (req, res) => {
   res.json(drops.report());
 });
 
+// { "channel": "berlu", "boosters": 3, "minute": 15 } : drop raté par le radar
+app.post("/drops/manual", (req, res) => {
+  const channel = normalize(req.body?.channel);
+  const { boosters, minute } = req.body ?? {};
+  if (!channel || !Number.isInteger(boosters) || boosters < 1 || boosters > 50
+    || (minute !== null && (!Number.isInteger(minute) || minute < 0 || minute > 100_000))) {
+    return res.status(400).json({ error: `Fournir "channel", "boosters" (1-50) et "minute" (minutes de live, ou null)` });
+  }
+  drops.addManual({ channel, boosters, minute });
+  log.log(`[drops] Drop ajouté à la main sur #${channel} : ${boosters} booster(s) par ${req.user}`);
+  syncDesired();
+  res.json({ ok: true });
+});
+
 // --- Pause de l'IRC : { "paused": true } quitte tous les chats et coupe la connexion ---
 
 app.post("/irc/pause", (req, res) => {

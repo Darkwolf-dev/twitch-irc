@@ -358,6 +358,19 @@
       <section>
         <h3>Derniers drops</h3>
         <ul id="drops-recent" class="drops-list"></ul>
+        <form id="drops-manual" class="drops-manual">
+          <span class="hint">Drop raté par le radar ?</span>
+          <input id="drops-manual-channel" placeholder="chaîne" aria-label="Chaîne" required>
+          <input id="drops-manual-boosters" type="number" min="1" max="50" value="1" aria-label="Boosters" title="Boosters">
+          <select id="drops-manual-moment" aria-label="Moment du live">
+            <option value="15">&lt; 30 min</option>
+            <option value="45">30 min – 1 h</option>
+            <option value="90">1 – 2 h</option>
+            <option value="180">2 – 4 h</option>
+            <option value="300">&gt; 4 h</option>
+          </select>
+          <button type="submit" class="small">Ajouter</button>
+        </form>
       </section>
     </div>
   </div>

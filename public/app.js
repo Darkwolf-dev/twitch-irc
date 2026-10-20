@@ -1215,7 +1215,7 @@ const liveMoment = (minute) => minute === null ? "hors live"
 function dropItem(d) {
   return el("li", {},
     el("div", { class: "drops-msg" },
-      el("strong", {}, d.channel), " ", d.text,
+      el("strong", {}, d.channel), " ", d.manual ? el("em", {}, "ajouté à la main") : d.text,
       el("span", { class: "hint" }, `${shortDate(d.at)} · ${liveMoment(d.minute)}${d.viewers ? ` · ${d.viewers} viewers` : ""}`)),
     el("span", { class: "hint drops-actions" }, `${d.boosters ?? "?"} booster(s)`));
 }
@@ -1259,6 +1259,21 @@ async function openDrops() {
     if (err.message !== "auth") $("drops-recent").replaceChildren(el("li", { class: "error" }, err.message));
   }
 }
+
+$("drops-manual").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/drops/manual", {
+      channel: $("drops-manual-channel").value,
+      boosters: Number($("drops-manual-boosters").value),
+      minute: Number($("drops-manual-moment").value),
+    });
+    $("drops-manual-channel").value = "";
+    await openDrops();
+  } catch (err) {
+    showError(err);
+  }
+});
 
 $("open-drops").addEventListener("click", openDrops);
 $("drops-close").addEventListener("click", () => $("drops-dialog").close());
