@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Twitch IRC Manager</title>
+<meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IRC Manager">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- use-credentials : le manifeste passe derrière Cloudflare Access, il a besoin du cookie -->
+<link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="offline-banner" class="offline-banner" role="status" hidden>
+  <span class="spinner" aria-hidden="true"></span>
+  Connexion au serveur perdue (redémarrage ou mise à jour ?) · reconnexion automatique…
+</div>
+<main>
+  <header>
+    <h1>Twitch IRC Manager</h1>
+    <div class="who">
+      <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
+      <div class="account" id="account" hidden>
+        <button type="button" id="me" class="me" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu"></button>
+        <div id="account-menu" class="account-menu" role="menu" hidden>
+          <p id="account-info" class="hint"></p>
+          <button type="button" id="menu-settings" role="menuitem" class="menu-item">⚙ Réglages</button>
+          <button type="button" id="logout" role="menuitem" class="menu-item danger-text">Se déconnecter</button>
+        </div>
+      </div>
+      <button type="button" id="irc" class="pill" hidden></button>
+    </div>
+  </header>
+
+  <section id="login" hidden>
+    <button type="button" id="twitch-login" class="twitch" hidden>Se connecter avec Twitch</button>
+    <details id="secret-login">
+      <summary>Utiliser le secret de l'API</summary>
+      <form id="secret-form">
+        <label for="secret">Secret de l'API</label>
+        <div class="row">
+          <input id="secret" type="password" autocomplete="current-password" required>
+          <button>Connexion</button>
+        </div>
+        <label class="check"><input id="remember" type="checkbox" checked> Se souvenir sur cet appareil</label>
+      </form>
+    </details>
+    <p id="login-error" class="error"></p>
+  </section>
+
+  <section id="panel" hidden>
+    <form id="add" class="row">
+      <input id="names" placeholder="Ajouter : chaine1, chaine2 …" autocomplete="off" autocapitalize="off" required>
+      <button>Ajouter</button>
+    </form>
+    <div class="options">
+      <label class="check"><input id="add-join" type="checkbox" checked> Activer directement</label>
+      <label class="check"><input id="add-live" type="checkbox" checked> Seulement pendant le live</label>
+    </div>
+    <p id="error" class="error" role="alert"></p>
+
+    <div id="dormant-card" class="dormant-card" hidden>
+      <span class="dormant-icon" aria-hidden="true">🧹</span>
+      <p id="dormant-text"></p>
+      <div class="bulk">
+        <button type="button" id="dormant-open">Voir</button>
+        <div class="snooze" role="group" aria-label="Masquer la suggestion">
+          <span class="hint">Masquer</span>
+          <button type="button" class="ghost small" data-snooze="1">1 j</button>
+          <button type="button" class="ghost small" data-snooze="2">2 j</button>
+          <button type="button" class="ghost small" data-snooze="7">7 j</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-bar">
+      <label for="profile-select">Profil</label>
+      <select id="profile-select"></select>
+      <span id="profile-state" class="hint"></span>
+      <div class="profile-actions">
+        <button type="button" id="profile-menu-btn" class="ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Gérer les profils">⋯</button>
+        <div id="profile-menu" class="account-menu" role="menu" hidden>
+          <button type="button" id="profile-new" role="menuitem" class="menu-item">＋ Enregistrer l'état actuel comme nouveau profil…</button>
+          <button type="button" id="profile-update" role="menuitem" class="menu-item">↻ Mettre à jour le profil actuel</button>
+          <div id="profile-delete-list" class="menu-section"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sticky-bar">
+      <div class="toolbar">
+        <span id="counts"></span>
+      </div>
+      <div class="scroller">
+        <div class="segmented" role="group" aria-label="Afficher">
+          <button type="button" data-view="all" class="active">Toutes</button>
+          <button type="button" data-view="fav">★ Favoris</button>
+          <button type="button" data-view="live">● En live</button>
+          <button type="button" data-view="on">Activées</button>
+          <button type="button" data-view="off">Désactivées</button>
+        </div>
+      </div>
+      <div id="group-tabs" class="chips scroller" role="group" aria-label="Groupes"></div>
+      <div class="toolbar filters">
+        <input id="filter" type="search" placeholder="Filtrer" autocapitalize="off">
+        <select id="sort" aria-label="Trier par">
+          <option value="status">Tri : statut</option>
+          <option value="viewers">Tri : spectateurs</option>
+          <option value="name">Tri : nom</option>
+          <option value="activity">Tri : dernier message</option>
+        </select>
+      </div>
+    </div>
+
+    <details class="bulk-box">
+      <summary>Actions groupées</summary>
+      <div class="toolbar">
+        <div class="bulk">
+          <button type="button" id="all-on" class="ghost">Tout activer</button>
+          <button type="button" id="all-off" class="ghost">Tout désactiver</button>
+        </div>
+      </div>
+      <div class="toolbar mode-bar">
+        <div>
+          <span id="mode-label">Quand rejoindre le chat :</span>
+          <div id="mode-current" class="hint"></div>
+        </div>
+        <div class="bulk">
+          <button type="button" id="mode-always" class="ghost" title="Rejoindre le chat en permanence">Toujours</button>
+          <button type="button" id="mode-live" class="ghost" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
+        </div>
+      </div>
+    </details>
+
+    <ul id="channels"></ul>
+
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dlg" tabindex="-1">
+        <div class="dlg-head">
+          <div class="dlg-titles"><h2 id="settings-title">Réglages</h2></div>
+          <button type="button" id="settings-close" class="close" aria-label="Fermer">×</button>
+        </div>
+        <div class="tabs scroller" role="tablist">
+          <button type="button" role="tab" data-stab="general">⚙ Général</button>
+          <button type="button" role="tab" data-stab="notifs">🔔 Notifications</button>
+          <button type="button" role="tab" data-stab="list">🧹 Liste</button>
+          <button type="button" role="tab" data-stab="security">🔐 Sécurité <span id="sanctions-count"></span></button>
+        </div>
+
+        <div id="stab-general" class="tab-panel settings-tab" role="tabpanel">
+          <form id="settings-form" class="card">
+            <h3>Chats rejoints en même temps</h3>
+            <div class="row">
+              <input id="max-concurrent" type="number" min="1" step="1" inputmode="numeric" required aria-label="Nombre maximum de chats rejoints">
+              <button>Enregistrer</button>
+            </div>
+            <p class="hint">Moins tu es présent dans de chats à la fois, moins ton compte ressemble à un bot. Au-delà du plafond : priorité aux chaînes « toujours », puis aux favoris, puis aux plus gros lives.</p>
+            <p id="settings-status" class="hint" role="status"></p>
+          </form>
+
+          <form id="schedule-form" class="card">
+            <h3>Plage horaire</h3>
+            <p class="hint">En dehors de la plage, les chaînes « si live » ne sont pas rejointes (les chaînes « toujours » ne sont pas concernées).</p>
+            <label class="check"><input id="schedule-enabled" type="checkbox"> Activer la plage horaire</label>
+            <div class="row times">
+              <label>De <input id="schedule-start" type="time" required></label>
+              <label>à <input id="schedule-end" type="time" required></label>
+            </div>
+            <label for="schedule-tz">Fuseau horaire</label>
+            <input id="schedule-tz" autocomplete="off" placeholder="Europe/Paris">
+            <div class="bulk actions"><button>Enregistrer</button></div>
+            <p id="schedule-status" class="hint" role="status"></p>
+          </form>
+        </div>
+
+        <div id="stab-notifs" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <form id="discord-form">
+            <div class="card">
+              <h3>Connexion à Discord</h3>
+              <label for="discord-webhook">Adresse du webhook</label>
+              <input id="discord-webhook" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…">
+              <label for="discord-user-id">Ton identifiant Discord, pour être @ (optionnel)</label>
+              <input id="discord-user-id" inputmode="numeric" autocomplete="off" placeholder="ex. 123456789012345678">
+              <p class="hint id-help">Discord → Paramètres → Avancés → Mode développeur, puis clic droit sur ton pseudo → « Copier l'identifiant utilisateur ».</p>
+              <div class="bulk">
+                <button type="button" id="discord-test" class="ghost">Envoyer un test</button>
+                <button type="button" id="discord-remove" class="ghost">Supprimer le webhook</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Quoi notifier</h3>
+              <label for="mention-keywords">Mentions : mots qui déclenchent une notification</label>
+              <input id="mention-keywords" autocomplete="off" placeholder="ton pseudo Twitch (par défaut)">
+              <label for="live-alerts">Quand un favori ★ passe en live</label>
+              <select id="live-alerts">
+                <option value="on">Message sur Discord</option>
+                <option value="ping">Message + me mentionner</option>
+                <option value="off">Rien</option>
+              </select>
+              <p class="hint">Toujours envoyés : timeouts et bans de ton compte, alertes de sécurité.</p>
+            </div>
+
+            <div class="card">
+              <h3>Heures calmes</h3>
+              <label class="check"><input id="quiet-enabled" type="checkbox"> Activer les heures calmes</label>
+              <div class="row times">
+                <label>De <input id="quiet-start" type="time"></label>
+                <label>à <input id="quiet-end" type="time"></label>
+              </div>
+              <p class="hint">Notifications en silencieux (sans son ni push, mention et pastille gardées). Les alertes de sécurité sonnent toujours.</p>
+            </div>
+
+            <div class="sticky-actions">
+              <button>Enregistrer les notifications</button>
+              <p id="discord-status" class="hint" role="status"></p>
+            </div>
+          </form>
+        </div>
+
+        <div id="stab-list" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <form id="dormant-form" class="card">
+            <h3>Nettoyage des chaînes endormies</h3>
+            <p class="hint">Suggère de retirer les chaînes sans live depuis ce nombre de jours (suivi du serveur et dernière VOD Twitch).</p>
+            <div class="row">
+              <input id="dormant-days" type="number" min="7" max="365" step="1" inputmode="numeric" required aria-label="Nombre de jours">
+              <button>Enregistrer</button>
+            </div>
+            <div class="bulk actions"><button type="button" id="dormant-open-2" class="ghost">Voir les chaînes endormies</button></div>
+            <p id="dormant-kept" class="hint"></p>
+          </form>
+          <div class="card">
+            <h3>Sauvegardes</h3>
+            <p id="backup-status" class="hint"></p>
+          </div>
+        </div>
+
+        <div id="stab-security" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <div id="security" class="card">
+            <h3>Appareils connectés</h3>
+            <ul id="session-list" class="session-list"></ul>
+            <div class="bulk"><button type="button" id="revoke-others" class="ghost">Déconnecter tous les autres appareils</button></div>
+          </div>
+          <div class="card">
+            <h3>Connexion par secret</h3>
+            <label class="check"><input id="allow-secret" type="checkbox"> Autoriser la connexion avec le secret de l'API</label>
+            <p class="hint">Décoche une fois la connexion Twitch en place : le secret ne servira plus qu'en dépannage depuis le serveur.</p>
+            <p id="security-status" class="hint" role="status"></p>
+          </div>
+          <div class="card">
+            <h3>Sanctions de ton compte</h3>
+            <p class="hint">Timeouts et bans reçus. Des bans sur plusieurs chaînes peuvent signifier que ton compte est pris pour un bot.</p>
+            <ul id="sanction-list" class="session-list"></ul>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <details id="journal" class="panel-box">
+      <summary>Journal <span id="journal-count"></span></summary>
+      <div class="journal-tools">
+        <select id="journal-level" aria-label="Niveau">
+          <option value="all">Tout</option>
+          <option value="problems">Avertissements et erreurs</option>
+        </select>
+        <input id="journal-filter" type="search" placeholder="Filtrer (chaîne, mot…)">
+        <button type="button" id="journal-download" class="ghost">Télécharger 30 jours</button>
+      </div>
+      <ol id="events"></ol>
+    </details>
+
+  </section>
+</main>
+
+<button type="button" id="to-top" class="to-top" aria-label="Remonter en haut" title="Remonter en haut">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+
+<dialog id="channel-dialog" aria-labelledby="dlg-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="dlg-title"></h2>
+        <p id="dlg-sub"></p>
+      </div>
+      <a id="dlg-twitch" class="ghost-link" target="_blank" rel="noopener noreferrer">Twitch ↗</a>
+      <button type="button" id="dlg-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="chat">💬 Chat</button>
+      <button type="button" role="tab" data-tab="stats">📊 Stats</button>
+      <button type="button" role="tab" data-tab="settings">⚙ Réglages</button>
+    </div>
+    <div id="tab-chat" class="tab-panel" role="tabpanel">
+      <p id="chat-note" class="hint" hidden></p>
+      <ol id="chat-log" class="chat-log" aria-live="polite"></ol>
+    </div>
+    <div id="tab-stats" class="tab-panel" role="tabpanel" hidden></div>
+    <div id="tab-settings" class="tab-panel" role="tabpanel" hidden></div>
+  </div>
+</dialog>
+
+<dialog id="dormant-dialog" aria-labelledby="dormant-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="dormant-title">🧹 Chaînes endormies</h2>
+        <p id="dormant-sub"></p>
+      </div>
+      <button type="button" id="dormant-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tab-panel">
+      <label class="check"><input id="dormant-all" type="checkbox" checked> Tout sélectionner</label>
+      <ul id="dormant-list" class="dormant-list"></ul>
+      <p class="hint">« Garder » : la chaîne ne sera plus jamais proposée (réversible dans Réglages → Nettoyage). Une sauvegarde de la liste est faite avant chaque retrait.</p>
+      <div class="bulk actions">
+        <button type="button" id="dormant-remove">Retirer la sélection</button>
+        <button type="button" id="dormant-disable" class="ghost">Seulement désactiver</button>
+      </div>
+      <p id="dormant-status" class="hint" role="status"></p>
+    </div>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# Déploiement derrière Cloudflare Tunnel : aucun port web ouvert sur le serveur,
+# HTTPS et protection gérés par Cloudflare.
+# Prérequis : TUNNEL_TOKEN dans .env (Cloudflare Zero Trust > Networks > Tunnels),
+# avec un « Public hostname » qui pointe vers http://app:3000
+#   docker compose -f docker-compose.tunnel.yml up -d --build
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATA_DIR: /data
+      CLIENT_IP_HEADER: cf-connecting-ip
+    volumes:
+      - ./data:/data
+    expose:
+      - "3000"
+    # Durcissement : système de fichiers en lecture seule (sauf /data et /tmp), aucun privilège Linux,
+    # pas d'élévation de droits, ressources plafonnées
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    cpus: 1.0
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: tunnel --no-autoupdate run
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 100
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN manquant dans .env}

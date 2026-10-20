@@ -1,0 +1,20 @@
+{
+  "name": "twitch-irc-manager",
+  "version": "1.0.0",
+  "description": "Gestionnaire IRC Twitch (un compte, plusieurs chaînes) pilotable via une API HTTP sécurisée",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "auth": "node scripts/auth.js",
+    "secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "ws": "^8.22.0"
+  }
+}
