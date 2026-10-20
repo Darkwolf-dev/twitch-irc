@@ -285,7 +285,13 @@ li .head .tag { flex: none; }
   background: none; color: var(--muted); border: 1px solid var(--border); border-radius: 999px;
   padding: 0 8px; min-height: 0; font-size: 11.5px; font-weight: 500; line-height: 18px;
 }
-.tag.mode:hover:not(:disabled) { color: var(--accent-text); border-color: var(--accent-text); }
+/* Mode « toujours » : pastille pleine et carrée (violet), distincte des groupes (contour arrondi) */
+.tag.mode {
+  border-radius: 4px; border-color: transparent; background: var(--accent-soft); color: var(--accent-text);
+  font-weight: 700; letter-spacing: .03em;
+}
+.tag.mode::before { content: "⟳ "; }
+.tag.mode:hover:not(:disabled) { border-color: var(--accent-text); }
 .tag.group:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); text-decoration: line-through; }
 .tag.add { border-style: dashed; opacity: 0; }
 #channels li:hover .tag.add, .tag.add:focus-visible { opacity: 1; }
