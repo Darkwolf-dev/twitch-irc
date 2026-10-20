@@ -25,6 +25,7 @@ class TokenManager {
     this.token = null;
     this.info = null;
     this.validatedAt = 0;
+    this.pending = null;
   }
 
   load() {
@@ -54,7 +55,18 @@ class TokenManager {
     return Boolean(this.token?.refresh_token && this.clientId);
   }
 
-  async get() {
+  // Un seul get() à la fois : deux renouvellements simultanés réutiliseraient le même
+  // refresh token, que Twitch invalide alors (avec le nouveau token).
+  get() {
+    if (!this.pending) {
+      this.pending = this.fetch().finally(() => {
+        this.pending = null;
+      });
+    }
+    return this.pending;
+  }
+
+  async fetch() {
     if (!this.token) this.token = this.load();
 
     if (!this.info || Date.now() - this.validatedAt > VALIDATE_EVERY_MS) {
