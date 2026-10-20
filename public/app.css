@@ -10,6 +10,7 @@
   --accent-text: #6d28d9;
   --accent-soft: rgba(145, 71, 255, .12);
   --live: #dc2626;
+  --live-bg: #d01714;
   --ok: #15803d;
   --warn: #b45309;
   --bad: #b91c1c;
@@ -32,6 +33,7 @@
     --accent-text: #bf94ff;
     --accent-soft: rgba(145, 71, 255, .16);
     --live: #f87171;
+    --live-bg: #e91916;
     --ok: #4ade80;
     --warn: #fbbf24;
     --bad: #f87171;
@@ -211,7 +213,19 @@ li .head .open:hover { color: var(--accent-text); text-decoration: underline; }
 .sanction-badge.ban { color: #fff; background: var(--bad); }
 .sanction-badge.timeout { color: #111; background: var(--warn); }
 #sanction-list li.past { opacity: .6; }
-.live-badge { flex: none; font-size: 12px; font-weight: 700; color: var(--live); font-variant-numeric: tabular-nums; }
+/* Badge LIVE plein (rouge Twitch) suivi du nombre de spectateurs */
+.live-badge {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; color: var(--live); font-variant-numeric: tabular-nums;
+}
+.live-tag {
+  padding: 0 5px; border-radius: 4px; line-height: 17px; font-size: 10.5px; letter-spacing: .05em;
+  background: var(--live-bg); color: #fff;
+}
+/* En live : liseré rouge à gauche ; hors live : pastille grisée et nom atténué */
+#channels li.live { box-shadow: inset 3px 0 0 var(--live-bg); }
+#channels li.idle .avatar { filter: grayscale(1); opacity: .45; }
+#channels li.idle .head .open { color: var(--muted); font-weight: 500; }
 li .live-line, li .last, li .last-live { font-size: 12.5px; font-weight: 400; color: var(--muted); }
 li .live-line strong, li .last strong { font-weight: 600; color: var(--text); }
 li.off .last strong, li.off .live-line strong { color: var(--muted); }

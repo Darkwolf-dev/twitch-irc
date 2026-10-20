@@ -408,7 +408,7 @@ function renderChannel(channel) {
   const badge = channel.live && el("span", {
     class: "live-badge",
     title: `En live depuis ${formatDuration(channel.live.startedAt)}`,
-  }, `● ${viewers.format(channel.live.viewers)}`);
+  }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers));
 
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
@@ -510,7 +510,8 @@ function renderChannel(channel) {
       : STATE_HINTS[channel.state] ?? "",
   }, el("span", { class: "dot", "aria-hidden": "true" }), el("span", { class: "label" }, LABELS[channel.state] || channel.state));
 
-  const classes = [channel.enabled ? "on" : "off", channel.watched && "watched", dialog.name === channel.name && "selected"];
+  const classes = [channel.enabled ? "on" : "off", channel.live ? "live" : "idle", channel.watched && "watched",
+    dialog.name === channel.name && "selected"];
   return el("li", { class: classes.filter(Boolean).join(" ") },
     star, seen, toggle, avatar(channel), name, state, remove);
 }
@@ -565,7 +566,7 @@ function renderDialogHeader() {
   if (!channel) return closeChannel();
   $("dlg-title").replaceChildren(
     el("span", {}, channel.name),
-    channel.live && el("span", { class: "live-badge" }, `● ${viewers.format(channel.live.viewers)}`));
+    channel.live && el("span", { class: "live-badge" }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers)));
   $("dlg-twitch").href = `https://www.twitch.tv/${encodeURIComponent(channel.name)}`;
   $("dlg-sub").textContent = channel.live
     ? `${channel.live.game || "Sans catégorie"} · ${channel.live.title}`
