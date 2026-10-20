@@ -280,7 +280,7 @@ li .live-line, li .last, li .last-live { font-size: 12.5px; font-weight: 400; co
 li .live-line strong, li .last strong { font-weight: 600; color: var(--text); }
 li.off .last strong, li.off .live-line strong { color: var(--muted); }
 
-li .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+li .head .tag { flex: none; }
 .tag {
   background: none; color: var(--muted); border: 1px solid var(--border); border-radius: 999px;
   padding: 0 8px; min-height: 0; font-size: 11.5px; font-weight: 500; line-height: 18px;
@@ -538,7 +538,7 @@ button.star.big.is-fav { color: var(--star); border-color: var(--star); }
   li .live-line { display: none; }      /* titre du live : visible dans la fiche */
   /* Commandes en ligne réservées à l'ordinateur ; sur téléphone, tout se règle dans la fiche */
   .desktop-only { display: none; }
-  .tags .tag { pointer-events: none; }
+  li .head .tag { pointer-events: none; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
 
   /* Fiche, réglages et nettoyage en plein écran */

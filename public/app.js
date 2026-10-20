@@ -484,10 +484,8 @@ function renderChannel(channel) {
       }
     },
   }, group));
-  const tags = (modeTag || groupTags.length > 0) && el("span", { class: "tags" }, modeTag, ...groupTags);
-
-  // « + groupe » : à côté du nom, visible au survol (ordinateur seulement)
-  head.append(el("button", {
+  // Sur la ligne du nom, pour ne pas ajouter de ligne ; « + groupe » visible au survol (ordinateur)
+  head.append(...[modeTag, ...groupTags].filter(Boolean), el("button", {
     class: "tag add desktop-only",
     disabled: isBusy,
     title: `Ajouter ${channel.name} à un groupe`,
@@ -500,7 +498,7 @@ function renderChannel(channel) {
     },
   }, "+ groupe"));
 
-  const name = el("div", { class: "name" }, head, liveLine, lastLiveLine, message, tags);
+  const name = el("div", { class: "name" }, head, liveLine, lastLiveLine, message);
 
   const remove = el("button", {
     class: "remove desktop-only",
@@ -572,9 +570,10 @@ function closeChannel() {
 function renderDialogHeader() {
   const channel = channelByName(dialog.name);
   if (!channel) return closeChannel();
-  $("dlg-title").replaceChildren(
+  $("dlg-title").replaceChildren(...[
     el("span", {}, channel.name),
-    channel.live && el("span", { class: "live-badge" }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers)));
+    channel.live && el("span", { class: "live-badge" }, el("span", { class: "live-tag" }, "LIVE"), viewers.format(channel.live.viewers)),
+  ].filter(Boolean));
   $("dlg-twitch").href = `https://www.twitch.tv/${encodeURIComponent(channel.name)}`;
   $("dlg-sub").textContent = channel.live
     ? `${channel.live.game || "Sans catégorie"} · ${channel.live.title}`
@@ -776,14 +775,19 @@ function renderChannelSettings(channel) {
   if (!channel) return;
   const box = $("tab-settings");
   const isBusy = busy.has(channel.name);
-  const run = (path, extra) => act(path, [channel.name], extra).then(() => renderDialogHeader());
+  const run = (path, extra) => act(path, [channel.name], extra).then(() => {
+    renderDialogHeader();
+    renderChannelSettings(channelByName(channel.name));
+  });
 
   const modeBtn = (liveOnly, label) => el("button", {
     type: "button",
     class: channel.liveOnly === liveOnly ? "active" : "",
     "aria-pressed": String(channel.liveOnly === liveOnly),
     disabled: isBusy,
-    onclick: () => channel.liveOnly !== liveOnly && run("/channels/mode", { liveOnly }),
+    title: channel.enabled ? "" : "Active aussi la chaîne",
+    onclick: () => !channel.enabled ? run("/channels/join", { liveOnly })
+      : channel.liveOnly !== liveOnly && run("/channels/mode", { liveOnly }),
   }, label);
 
   const groupInput = el("input", { list: "group-list", placeholder: "Nouveau groupe ou groupe existant", autocomplete: "off" });
