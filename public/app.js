@@ -448,7 +448,7 @@ function renderChannel(channel) {
   const dropped = wait > 0 && el("span", {
     class: "drop-badge",
     title: `Drop à ${new Date(channel.lastDrop).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} : pas de nouveau drop possible avant ${wait} min`,
-  }, el("span", { class: "drop-icon" }, "🎁"), el("span", { class: "drop-wait" }, ` ${wait} min`));
+  }, "🎁", el("span", { class: "drop-wait" }, ` ${wait} min`));
 
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
