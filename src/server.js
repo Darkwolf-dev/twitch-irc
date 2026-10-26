@@ -77,7 +77,7 @@ const secureCookie = COOKIE_SECURE !== "false";
 //
 // enabled   : l'interrupteur de la chaîne
 // liveOnly  : si activée, on ne rejoint le chat que pendant le live
-// watchedAt : « assez regardée aujourd'hui », remis à zéro chaque jour à 2 h
+// watchedAt : « assez regardée aujourd'hui », remis à zéro chaque jour à minuit UTC
 
 const saved = new Set();
 const enabled = new Set();
@@ -86,13 +86,10 @@ const favorites = new Set();
 const groups = new Map(); // chaîne -> Set des groupes
 const watched = new Map(); // chaîne -> date du marquage (ISO)
 
-// Une « journée de visionnage » va de 2 h à 2 h (heure de Paris) : deux dates
-// sont dans la même journée si elles tombent le même jour une fois reculées de 2 h.
-const WATCH_RESET_HOUR = 2;
-const WATCH_TIME_ZONE = "Europe/Paris";
+// Une « journée de visionnage » va de minuit à minuit UTC (1 h à Paris l'hiver,
+// 2 h l'été) : deux dates sont dans la même journée si elles ont la même date UTC.
 function watchDay(at) {
-  return new Intl.DateTimeFormat("fr-CA", { timeZone: WATCH_TIME_ZONE })
-    .format(new Date(new Date(at).getTime() - WATCH_RESET_HOUR * 3600_000));
+  return new Date(at).toISOString().slice(0, 10);
 }
 function isWatched(name) {
   const at = watched.get(name);
@@ -372,7 +369,7 @@ function saveSettings() {
 // d'abord les chaînes « toujours » (favoris en tête), puis celles « si live »
 // actuellement en live (favoris, puis celles qui droppent le plus, puis plus gros lives).
 function syncDesired() {
-  // Une chaîne marquée « vu » n'est plus rejointe jusqu'à la remise à zéro de 2 h
+  // Une chaîne marquée « vu » n'est plus rejointe jusqu'à la remise à zéro de minuit UTC
   const candidates = [...enabled].filter((n) => !isWatched(n));
   const always = candidates
     .filter((n) => !liveOnly.has(n))
@@ -1279,7 +1276,7 @@ app.post("/channels/favorite", (req, res) => {
 });
 
 // Marque une chaîne comme assez regardée aujourd'hui : { "channels": [...], "watched": true|false }
-// Tant qu'elle est marquée, la chaîne n'est plus rejointe. Les marques tombent d'elles-mêmes à 2 h (voir watchDay).
+// Tant qu'elle est marquée, la chaîne n'est plus rejointe. Les marques tombent d'elles-mêmes à minuit UTC (voir watchDay).
 app.post("/channels/watched", (req, res) => {
   const { names, error } = readChannels(req.body);
   if (error) return res.status(400).json({ error });
@@ -1297,7 +1294,7 @@ app.post("/channels/watched", (req, res) => {
   res.json({ ok: true, channels: commit(names) });
 });
 
-// Remise à zéro quotidienne : oublie les marques d'avant 2 h et le note au journal
+// Remise à zéro quotidienne : oublie les marques d'avant minuit UTC et le note au journal
 setInterval(() => {
   const expired = [...watched.keys()].filter((name) => !isWatched(name));
   if (!expired.length) return;

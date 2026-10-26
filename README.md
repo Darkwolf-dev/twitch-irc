@@ -71,7 +71,7 @@ Toutes les routes exigent l'en-tête `Authorization: Bearer <API_SECRET>`, ou un
 | POST    | `/channels/mode`   | `{"channels":["a"],"liveOnly":true}`              | Mode « si live » (`false` : toujours) |
 | POST    | `/channels/remove` | idem                                              | Désactive et retire de la liste       |
 | POST    | `/channels/favorite` | `{"channels":["a"],"favorite":true}`            | Ajoute aux favoris (`false` pour retirer) |
-| POST    | `/channels/watched`  | `{"channels":["a"],"watched":true}`             | Marque « finie » pour aujourd'hui, jusqu'à 2 h (heure de Paris) |
+| POST    | `/channels/watched`  | `{"channels":["a"],"watched":true}`             | Marque « finie » pour aujourd'hui, jusqu'à minuit UTC (1 h à Paris l'hiver, 2 h l'été) |
 | POST    | `/channels/group`  | `{"channels":["a"],"group":"24h","member":true}`  | Ajoute à un groupe (`false` pour retirer) |
 
 Jusqu'à 500 chaînes enregistrées, dont `MAX_CHANNELS` (100) rejointes en même temps.

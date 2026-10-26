@@ -14,11 +14,13 @@ const LABELS = {
   schedule: "hors plage horaire",
   watched: "fini, quitté",
 };
+// Les marques « fini » tombent à minuit UTC : 1 h à Paris l'hiver, 2 h l'été
+const RESET_AT = `${new Date(new Date().setUTCHours(24, 0, 0, 0)).getHours()} h`;
 const STATE_HINTS = {
   offline: "Mode « si live » : le chat sera rejoint au début du prochain live",
   full: "Plafond de chats simultanés atteint (réglable dans Réglages)",
   schedule: "En live, mais en dehors de la plage horaire (réglable dans Réglages)",
-  watched: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h",
+  watched: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}`,
 };
 
 let secret = null;
@@ -310,7 +312,7 @@ function visibleChannels() {
 const statusRank = (c) =>
   c.live ? (c.watched ? 2 : c.enabled ? 0 : 1) : c.state === "joined" || c.state === "joining" ? 3 : 4;
 const byName = (a, b) => a.name.localeCompare(b.name);
-// Un favori marqué « fini » perd sa priorité jusqu'à 2 h
+// Un favori marqué « fini » perd sa priorité jusqu'à la remise à zéro
 const priority = (c) => Boolean(c.favorite && !c.watched);
 const SORTS = {
   // lives d'abord ; dans chaque bloc (live / hors live) les favoris en tête, puis statut, puis nom
@@ -420,8 +422,8 @@ function renderChannel(channel) {
     "aria-pressed": String(channel.watched),
     "aria-label": `${channel.name} assez regardée aujourd'hui`,
     title: channel.watched
-      ? "Finie pour aujourd'hui : chat quitté et chaîne reléguée jusqu'à 2 h (clic : annuler)"
-      : "Finie pour aujourd'hui : quitter le chat et la reléguer en bas jusqu'à 2 h",
+      ? `Finie pour aujourd'hui : chat quitté et chaîne reléguée jusqu'à ${RESET_AT} (clic : annuler)`
+      : `Finie pour aujourd'hui : quitter le chat et la reléguer en bas jusqu'à ${RESET_AT}`,
     onclick: () => act("/channels/watched", [channel.name], { watched: !channel.watched }),
   }, "✓");
 
@@ -467,7 +469,7 @@ function renderChannel(channel) {
     fresh,
     dropped,
     sanction,
-    channel.watched && el("span", { class: "seen-badge", title: "Finie pour aujourd'hui : chat quitté jusqu'à 2 h" }, "fini"),
+    channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"),
     el("a", {
       class: "twitch-link",
       href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
@@ -877,9 +879,9 @@ function renderChannelSettings(channel) {
       el("button", {
         type: "button", class: `seen big${channel.watched ? " is-seen" : ""}`, disabled: isBusy,
         "aria-pressed": String(channel.watched),
-        title: "Quitte le chat et relègue la chaîne en bas de la liste. Remise à zéro chaque jour à 2 h",
+        title: `Quitte le chat et relègue la chaîne en bas de la liste. Remise à zéro chaque jour à ${RESET_AT}`,
         onclick: () => run("/channels/watched", { watched: !channel.watched }),
-      }, channel.watched ? "✓ finie jusqu'à 2 h" : "marquer comme finie")),
+      }, channel.watched ? `✓ finie jusqu'à ${RESET_AT}` : "marquer comme finie")),
     el("div", { class: "field column" },
       el("span", { class: "field-label" }, "Quand rejoindre le chat"),
       el("div", { class: "segmented" }, modeBtn(false, "Toujours"), modeBtn(true, "Seulement en live"))),

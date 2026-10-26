@@ -330,7 +330,7 @@ li .detail .dot { width: 8px; height: 8px; border-radius: 50%; background: curre
 li .star { background: none; color: var(--muted); padding: 4px; min-height: 36px; min-width: 32px; font-size: 18px; line-height: 1; }
 li .star.is-fav, li .star:hover { color: var(--star); }
 
-/* « Assez regardée aujourd'hui » : ligne estompée, chat quitté, jusqu'à 2 h */
+/* « Assez regardée aujourd'hui » : ligne estompée, chat quitté, jusqu'à minuit UTC */
 li .seen {
   flex: none; width: 28px; height: 28px; min-height: 0; padding: 0; border-radius: 50%;
   background: none; color: var(--muted); border: 1.5px solid var(--border); font-size: 14px; line-height: 1;
