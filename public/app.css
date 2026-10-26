@@ -228,6 +228,11 @@ button.icon-sq { min-width: 36px; min-height: 36px; padding: 0 8px; font-size: 1
 .chip-sep[hidden] { display: none; }
 .chip-group { display: flex; gap: 6px; }
 .chip-group[hidden] { display: none; }
+/* Sur grand écran, les filtres passent à la ligne au lieu de défiler */
+@media (min-width: 600px) {
+  .view-row { flex-wrap: wrap; overflow-x: visible; }
+  .view-row .chip-group { display: contents; }
+}
 
 /* Pastille « chaînes endormies » sur la roue des réglages */
 .badge-wrap { position: relative; display: inline-flex; }

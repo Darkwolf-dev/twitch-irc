@@ -306,6 +306,7 @@ function visibleChannels() {
       if (view === "done") return c.watched;
       if (view === "no-epic") return !c.cards.includes("epic");
       if (view === "no-legendary") return !c.cards.includes("legendary");
+      if (view === "no-card") return !c.cards.length;
       if (view === "on") return c.enabled;
       if (view === "off") return !c.enabled;
       if (view.startsWith("group:")) return c.groups.includes(view.slice(6));
@@ -339,6 +340,7 @@ function scopeLabel() {
   if (view === "done") return "les chaînes finies";
   if (view === "no-epic") return "les chaînes sans carte épique";
   if (view === "no-legendary") return "les chaînes sans carte légendaire";
+  if (view === "no-card") return "les chaînes sans carte";
   if (view.startsWith("group:")) return `« ${view.slice(6)} »`;
   if (typedNames().length || view === "on" || view === "off") return "la sélection";
   return null;
@@ -373,6 +375,7 @@ function render() {
     done: channels.filter((c) => c.watched).length,
     "no-epic": channels.filter((c) => !c.cards.includes("epic")).length,
     "no-legendary": channels.filter((c) => !c.cards.includes("legendary")).length,
+    "no-card": channels.filter((c) => !c.cards.length).length,
   };
   for (const n of document.querySelectorAll("[data-count]")) n.textContent = String(viewCounts[n.dataset.count] ?? "");
   renderSettings();
