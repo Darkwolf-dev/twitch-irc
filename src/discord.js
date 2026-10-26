@@ -70,7 +70,7 @@ class MentionNotifier {
   }
 
   // Un favori vient de passer en live. mode : "on" (message) ou "ping" (message + mention)
-  liveAlert(channel, info, mode) {
+  liveAlert(channel, info, mode, { noCard = false } = {}) {
     const { discordWebhook } = this.getSettings();
     if (!discordWebhook || mode === "off") return;
     this.log.log(`[discord] Alerte live : ${channel}`);
@@ -80,7 +80,7 @@ class MentionNotifier {
         author: { name: `${info.displayName || channel} est en live` },
         title: info.title?.slice(0, 250) || `Ouvrir ${channel}`,
         url,
-        description: info.game ? `🎮 ${info.game}` : undefined,
+        description: [info.game && `🎮 ${info.game}`, noCard && "🃏 Aucune carte de ce streamer"].filter(Boolean).join("\n") || undefined,
         image: info.thumbnail ? { url: `${info.thumbnail}?t=${Date.now()}` } : undefined,
         color: 0xe91916,
         timestamp: info.startedAt,

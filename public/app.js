@@ -989,6 +989,7 @@ function renderSettings() {
   if (document.activeElement !== keywordsInput) keywordsInput.value = s.mentionKeywords.join(", ");
   keywordsInput.placeholder = `${lastStatus.irc.username ?? "ton pseudo"} (par défaut)`;
   if (document.activeElement !== $("live-alerts")) $("live-alerts").value = s.discordLiveAlerts;
+  if (document.activeElement !== $("nocard-alerts")) $("nocard-alerts").value = s.discordNoCardAlerts;
   if (!$("discord-form").contains(document.activeElement)) {
     $("quiet-enabled").checked = s.quietHours.enabled;
     $("quiet-start").value = s.quietHours.start;
@@ -1055,6 +1056,7 @@ $("discord-form").addEventListener("submit", (e) => {
     mentionKeywords: $("mention-keywords").value.split(/[,;\n]+/).map((k) => k.trim()).filter(Boolean),
     discordUserId: $("discord-user-id").value.trim(),
     discordLiveAlerts: $("live-alerts").value,
+    discordNoCardAlerts: $("nocard-alerts").value,
     quietHours: {
       enabled: $("quiet-enabled").checked,
       start: $("quiet-start").value,

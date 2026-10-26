@@ -205,7 +205,11 @@ const live = new LiveMonitor({
     syncDesired();
   },
   onWentLive: (channel, info) => {
-    if (favorites.has(channel)) notifier.liveAlert(channel, info, settings.discordLiveAlerts);
+    // Une seule alerte même si la chaîne est favorite et sans carte : le mode le plus fort l'emporte
+    const noCard = !cardsOf(channel).length;
+    const modes = [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts];
+    const mode = ["ping", "on"].find((m) => modes.includes(m));
+    if (mode) notifier.liveAlert(channel, info, mode, { noCard });
   },
   onAuthFailure: () => tokens.invalidate(),
   log,
@@ -284,6 +288,7 @@ const settings = {
   discordUserId: "",
   mentionKeywords: [],
   discordLiveAlerts: "on", // favori en live : "off" | "on" | "ping"
+  discordNoCardAlerts: "on", // chaîne sans aucune carte streamer en live : "off" | "on" | "ping"
   allowSecretLogin: true,  // connexion au panneau / à l'API avec le secret (toujours permise depuis le serveur lui-même)
   ircPaused: false,        // IRC mis en pause depuis le panneau (conservé au redémarrage)
   dormantDays: 30,         // chaîne « endormie » au-delà de N jours sans live
@@ -301,6 +306,7 @@ if (!isWebhookUrl(settings.discordWebhook)) settings.discordWebhook = "";
 if (!Array.isArray(settings.mentionKeywords)) settings.mentionKeywords = [];
 if (!isDiscordUserId(settings.discordUserId)) settings.discordUserId = "";
 if (!["off", "on", "ping"].includes(settings.discordLiveAlerts)) settings.discordLiveAlerts = "on";
+if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "on";
 if (typeof settings.allowSecretLogin !== "boolean") settings.allowSecretLogin = true;
 settings.ircPaused = settings.ircPaused === true;
 settings.dormantDays = Math.min(365, Math.max(7, Number(settings.dormantDays) || 30));
@@ -350,6 +356,7 @@ function publicSettings() {
     discordUserId: settings.discordUserId,
     discordWebhookSet: Boolean(settings.discordWebhook),
     discordLiveAlerts: settings.discordLiveAlerts,
+    discordNoCardAlerts: settings.discordNoCardAlerts,
     allowSecretLogin: settings.allowSecretLogin,
     quietHours: settings.quietHours,
     quietNow: quietNow(),
@@ -965,7 +972,7 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { maxConcurrent, discordWebhook, discordUserId, mentionKeywords, discordLiveAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
+  const { maxConcurrent, discordWebhook, discordUserId, mentionKeywords, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
   const newQuiet = quietHours === undefined ? undefined : validSchedule(quietHours);
   if (newQuiet === null) return res.status(400).json({ error: "Heures calmes invalides (heures HH:MM différentes, fuseau valide)" });
   if (allowSecretLogin !== undefined) {
@@ -977,6 +984,9 @@ app.post("/settings", (req, res) => {
   }
   if (discordLiveAlerts !== undefined && !["off", "on", "ping"].includes(discordLiveAlerts)) {
     return res.status(400).json({ error: `"discordLiveAlerts" doit valoir off, on ou ping` });
+  }
+  if (discordNoCardAlerts !== undefined && !["off", "on", "ping"].includes(discordNoCardAlerts)) {
+    return res.status(400).json({ error: `"discordNoCardAlerts" doit valoir off, on ou ping` });
   }
   const newSchedule = schedule === undefined ? undefined : validSchedule(schedule);
   if (newSchedule === null) {
@@ -1013,6 +1023,7 @@ app.post("/settings", (req, res) => {
   if (keywords) settings.mentionKeywords = keywords;
   if (discordUserId !== undefined) settings.discordUserId = discordUserId;
   if (discordLiveAlerts !== undefined) settings.discordLiveAlerts = discordLiveAlerts;
+  if (discordNoCardAlerts !== undefined) settings.discordNoCardAlerts = discordNoCardAlerts;
   if (newQuiet && JSON.stringify(newQuiet) !== JSON.stringify(settings.quietHours)) {
     settings.quietHours = newQuiet;
     log.log(`[api] Heures calmes ${newQuiet.enabled ? `${newQuiet.start}–${newQuiet.end}` : "désactivées"}`);
