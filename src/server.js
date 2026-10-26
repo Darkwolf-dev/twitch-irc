@@ -72,12 +72,13 @@ const secureCookie = COOKIE_SECURE !== "false";
 
 // --- État des chaînes ---
 // Format du fichier :
-// { "channels": [{ "name": "x", "enabled": true, "liveOnly": false, "favorite": false, "groups": ["24h"], "watchedAt": null }, …] }
+// { "channels": [{ "name": "x", "enabled": true, "liveOnly": false, "favorite": false, "groups": ["24h"], "watchedAt": null, "cards": ["epic"] }, …] }
 // (l'ancien format { "channels": ["x", …] } est lu comme « tout activé »)
 //
 // enabled   : l'interrupteur de la chaîne
 // liveOnly  : si activée, on ne rejoint le chat que pendant le live
 // watchedAt : « assez regardée aujourd'hui », remis à zéro chaque jour à minuit UTC
+// cards     : cartes streamer déjà obtenues (« epic », « legendary »), simple info pour l'instant
 
 const saved = new Set();
 const enabled = new Set();
@@ -85,6 +86,9 @@ const liveOnly = new Set();
 const favorites = new Set();
 const groups = new Map(); // chaîne -> Set des groupes
 const watched = new Map(); // chaîne -> date du marquage (ISO)
+const CARD_RARITIES = ["epic", "legendary"];
+const cards = new Map(); // chaîne -> Set des raretés obtenues
+const cardsOf = (name) => CARD_RARITIES.filter((r) => cards.get(name)?.has(r));
 
 // Une « journée de visionnage » va de minuit à minuit UTC (1 h à Paris l'hiver,
 // 2 h l'été) : deux dates sont dans la même journée si elles ont la même date UTC.
@@ -124,6 +128,7 @@ function saveChannels() {
     favorite: favorites.has(name),
     groups: groupsOf(name),
     watchedAt: isWatched(name) ? watched.get(name) : null,
+    cards: cardsOf(name),
   }));
   const tmp = CHANNELS_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify({ channels }, null, 2));
@@ -163,6 +168,8 @@ for (const channel of loadChannels()) {
   if (channel.watchedAt && !Number.isNaN(Date.parse(channel.watchedAt))) watched.set(name, channel.watchedAt);
   const channelGroups = (channel.groups ?? []).map(normalizeGroup).filter(Boolean);
   if (channelGroups.length) groups.set(name, new Set(channelGroups));
+  const owned = (channel.cards ?? []).filter((r) => CARD_RARITIES.includes(r));
+  if (owned.length) cards.set(name, new Set(owned));
 }
 
 // --- IRC et live ---
@@ -511,6 +518,7 @@ function channelInfo(name) {
     favorite: favorites.has(name),
     groups: groupsOf(name),
     watched: isWatched(name),
+    cards: cardsOf(name),
     lastDrop: drops.recentDropOf(name)?.at ?? null,
   };
 }
@@ -1249,6 +1257,7 @@ app.post("/channels/remove", (req, res) => {
     favorites.delete(name);
     groups.delete(name);
     watched.delete(name);
+    cards.delete(name);
     stats.forget(name);
     dormant.forget(name);
     avatars.forget(name);
@@ -1271,6 +1280,29 @@ app.post("/channels/favorite", (req, res) => {
   for (const name of names) {
     if (req.body.favorite) favorites.add(name);
     else favorites.delete(name);
+  }
+  res.json({ ok: true, channels: commit(names) });
+});
+
+// Note une carte streamer obtenue ou non : { "channels": [...], "rarity": "epic"|"legendary", "owned": true|false }
+app.post("/channels/card", (req, res) => {
+  const { names, error } = readChannels(req.body);
+  if (error) return res.status(400).json({ error });
+  if (!CARD_RARITIES.includes(req.body.rarity)) {
+    return res.status(400).json({ error: `"rarity" doit valoir ${CARD_RARITIES.join(" ou ")}` });
+  }
+  if (typeof req.body.owned !== "boolean") {
+    return res.status(400).json({ error: `"owned" doit valoir true ou false` });
+  }
+  const unknown = names.filter((name) => !saved.has(name));
+  if (unknown.length) return res.status(404).json({ error: `Chaîne non enregistrée : ${unknown.join(", ")}` });
+
+  for (const name of names) {
+    const set = cards.get(name) ?? new Set();
+    if (req.body.owned) set.add(req.body.rarity);
+    else set.delete(req.body.rarity);
+    if (set.size) cards.set(name, set);
+    else cards.delete(name);
   }
   res.json({ ok: true, channels: commit(names) });
 });

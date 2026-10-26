@@ -16,6 +16,11 @@ const LABELS = {
 };
 // Les marques « fini » tombent à minuit UTC : 1 h à Paris l'hiver, 2 h l'été
 const RESET_AT = `${new Date(new Date().setUTCHours(24, 0, 0, 0)).getHours()} h`;
+// Cartes streamer qu'on peut cocher sur chaque chaîne
+const CARDS = [
+  { rarity: "epic", label: "Épique" },
+  { rarity: "legendary", label: "Légendaire" },
+];
 const STATE_HINTS = {
   offline: "Mode « si live » : le chat sera rejoint au début du prochain live",
   full: "Plafond de chats simultanés atteint (réglable dans Réglages)",
@@ -299,6 +304,8 @@ function visibleChannels() {
       if (view === "fav") return c.favorite;
       if (view === "live") return c.live;
       if (view === "done") return c.watched;
+      if (view === "no-epic") return !c.cards.includes("epic");
+      if (view === "no-legendary") return !c.cards.includes("legendary");
       if (view === "on") return c.enabled;
       if (view === "off") return !c.enabled;
       if (view.startsWith("group:")) return c.groups.includes(view.slice(6));
@@ -330,6 +337,8 @@ function scopeLabel() {
   if (view === "fav") return "les favoris";
   if (view === "live") return "les lives";
   if (view === "done") return "les chaînes finies";
+  if (view === "no-epic") return "les chaînes sans carte épique";
+  if (view === "no-legendary") return "les chaînes sans carte légendaire";
   if (view.startsWith("group:")) return `« ${view.slice(6)} »`;
   if (typedNames().length || view === "on" || view === "off") return "la sélection";
   return null;
@@ -362,6 +371,8 @@ function render() {
   const viewCounts = {
     all: counts.saved, live: counts.live, fav: counts.favorites, on: counts.enabled, off: counts.saved - counts.enabled,
     done: channels.filter((c) => c.watched).length,
+    "no-epic": channels.filter((c) => !c.cards.includes("epic")).length,
+    "no-legendary": channels.filter((c) => !c.cards.includes("legendary")).length,
   };
   for (const n of document.querySelectorAll("[data-count]")) n.textContent = String(viewCounts[n.dataset.count] ?? "");
   renderSettings();
@@ -469,6 +480,8 @@ function renderChannel(channel) {
     fresh,
     dropped,
     sanction,
+    ...CARDS.filter((card) => channel.cards.includes(card.rarity)).map((card) =>
+      el("span", { class: `card-badge ${card.rarity}`, title: `Carte streamer ${card.label.toLowerCase()} obtenue` }, card.label)),
     channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"),
     el("a", {
       class: "twitch-link",
@@ -882,6 +895,17 @@ function renderChannelSettings(channel) {
         title: `Quitte le chat et relègue la chaîne en bas de la liste. Remise à zéro chaque jour à ${RESET_AT}`,
         onclick: () => run("/channels/watched", { watched: !channel.watched }),
       }, channel.watched ? `✓ finie jusqu'à ${RESET_AT}` : "marquer comme finie")),
+    el("div", { class: "field" },
+      el("span", { class: "field-label" }, "Carte streamer"),
+      el("div", { class: "row" }, ...CARDS.map((card) => {
+        const owned = channel.cards.includes(card.rarity);
+        return el("button", {
+          type: "button", class: `card big ${card.rarity}${owned ? " is-owned" : ""}`, disabled: isBusy,
+          "aria-pressed": String(owned),
+          title: owned ? `Carte ${card.label.toLowerCase()} obtenue (clic : retirer)` : `Noter la carte ${card.label.toLowerCase()} comme obtenue`,
+          onclick: () => run("/channels/card", { rarity: card.rarity, owned: !owned }),
+        }, `${owned ? "☑" : "☐"} ${card.label}`);
+      }))),
     el("div", { class: "field column" },
       el("span", { class: "field-label" }, "Quand rejoindre le chat"),
       el("div", { class: "segmented" }, modeBtn(false, "Toujours"), modeBtn(true, "Seulement en live"))),

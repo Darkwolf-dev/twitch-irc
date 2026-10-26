@@ -17,6 +17,8 @@
   --star: #ca8a04;
   --mention: rgba(234, 179, 8, .16);
   --watched: #0f766e;
+  --epic: #7e22ce;
+  --legendary: #c2410c;
   --watched-ink: #fff;
   color-scheme: light dark;
 }
@@ -40,6 +42,8 @@
     --star: #eab308;
     --mention: rgba(234, 179, 8, .18);
     --watched: #2dd4bf;
+    --epic: #c084fc;
+    --legendary: #fb923c;
     --watched-ink: #042f2e;
   }
 }
@@ -345,6 +349,17 @@ li .seen.is-seen { background: var(--watched); border-color: var(--watched); col
 }
 button.seen.big { background: none; color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; font-size: 14px; }
 button.seen.big.is-seen { color: var(--watched); border-color: var(--watched); }
+
+/* Cartes streamer obtenues : pastille dans la liste, cases dans la fiche */
+.card-badge {
+  flex: none; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; line-height: 16px;
+  text-transform: uppercase; letter-spacing: .04em; border: 1px solid currentColor;
+}
+.card-badge.epic { color: var(--epic); }
+.card-badge.legendary { color: var(--legendary); }
+button.card.big { background: none; color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; font-size: 14px; }
+button.card.big.epic.is-owned { color: var(--epic); border-color: var(--epic); }
+button.card.big.legendary.is-owned { color: var(--legendary); border-color: var(--legendary); }
 
 /* Interrupteur */
 .switch { position: relative; flex: none; width: 42px; height: 24px; margin: 0; }
