@@ -322,13 +322,10 @@ const statusRank = (c) =>
 const byName = (a, b) => a.name.localeCompare(b.name);
 // Un favori marqué « fini » perd sa priorité jusqu'à la remise à zéro
 const priority = (c) => Boolean(c.favorite && !c.watched);
-// En live, les chaînes dont il manque des cartes passent devant (aucune carte, puis une, puis les deux)
-const cardRank = (c) => (c.live ? c.cards.length : 0);
 const SORTS = {
-  // lives d'abord ; dans chaque bloc (live / hors live) les favoris en tête, puis (en live) les cartes
-  // manquantes, puis statut, puis nom
+  // lives d'abord ; dans chaque bloc (live / hors live) les favoris en tête, puis statut, puis nom
   status: (a, b) => (Boolean(b.live) - Boolean(a.live)) || (priority(b) - priority(a)) ||
-    (cardRank(a) - cardRank(b)) || (statusRank(a) - statusRank(b)) || byName(a, b),
+    (statusRank(a) - statusRank(b)) || byName(a, b),
   // lives du plus gros au plus petit (les chaînes « fini » après), puis les autres par nom
   viewers: (a, b) => (a.watched - b.watched) || ((b.live?.viewers ?? -1) - (a.live?.viewers ?? -1)) || byName(a, b),
   name: byName,
