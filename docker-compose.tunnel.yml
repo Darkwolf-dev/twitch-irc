@@ -30,7 +30,9 @@ services:
     cpus: 1.0
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Version épinglée : « latest » n'est jamais retiré tant que le conteneur tourne.
+    # 2026.10.2+ requis (certificats intermédiaires eMudhra compromis, oct. 2026).
+    image: cloudflare/cloudflared:2026.10.3
     restart: unless-stopped
     depends_on:
       - app
