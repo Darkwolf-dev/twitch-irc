@@ -288,7 +288,7 @@ const settings = {
   discordUserId: "",
   mentionKeywords: [],
   discordLiveAlerts: "on", // favori en live : "off" | "on" | "ping"
-  discordNoCardAlerts: "on", // chaîne sans aucune carte streamer en live : "off" | "on" | "ping"
+  discordNoCardAlerts: "ping", // chaîne sans aucune carte streamer en live : "off" | "on" | "ping"
   allowSecretLogin: true,  // connexion au panneau / à l'API avec le secret (toujours permise depuis le serveur lui-même)
   ircPaused: false,        // IRC mis en pause depuis le panneau (conservé au redémarrage)
   dormantDays: 30,         // chaîne « endormie » au-delà de N jours sans live
@@ -306,7 +306,7 @@ if (!isWebhookUrl(settings.discordWebhook)) settings.discordWebhook = "";
 if (!Array.isArray(settings.mentionKeywords)) settings.mentionKeywords = [];
 if (!isDiscordUserId(settings.discordUserId)) settings.discordUserId = "";
 if (!["off", "on", "ping"].includes(settings.discordLiveAlerts)) settings.discordLiveAlerts = "on";
-if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "on";
+if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "ping";
 if (typeof settings.allowSecretLogin !== "boolean") settings.allowSecretLogin = true;
 settings.ircPaused = settings.ircPaused === true;
 settings.dormantDays = Math.min(365, Math.max(7, Number(settings.dormantDays) || 30));
