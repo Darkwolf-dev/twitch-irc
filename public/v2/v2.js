@@ -59,7 +59,9 @@ function dropScore(name) {
 // --- « À farmer » : en live, au moins une carte manquante, pas finie, pas bannie ---
 
 const isTodo = (c) => Boolean(c.live && !c.watched && c.cards.length < CARDS.length && c.sanction?.type !== "ban");
-const byTodo = (a, b) => ((dropScore(b.name)?.score ?? 0) - (dropScore(a.name)?.score ?? 0)) ||
+// Sans aucune carte d'abord, puis les plus généreuses en drops, puis les plus gros lives
+const byTodo = (a, b) => (a.cards.length - b.cards.length) ||
+  ((dropScore(b.name)?.score ?? 0) - (dropScore(a.name)?.score ?? 0)) ||
   (b.live.viewers - a.live.viewers) || a.name.localeCompare(b.name);
 
 function missingLabel(channel) {
@@ -195,7 +197,7 @@ function renderTodo() {
   box.replaceChildren(
     el("div", { class: "v2-todo-head" },
       el("h2", { id: "v2-todo-title" }, "À farmer maintenant"),
-      el("p", { class: "hint" }, "En live, sans toutes les cartes, pas encore finies · les plus généreuses en drops d'abord"),
+      el("p", { class: "hint" }, "En live, pas encore finies · sans aucune carte d'abord, puis les plus généreuses en drops"),
       el("button", { type: "button", onclick: () => setView("todo") }, `Tout voir (${todo.length})`)),
     el("div", { class: "v2-todo-grid" }, ...todo.slice(0, 4).map((c) => {
       const score = dropScore(c.name);
