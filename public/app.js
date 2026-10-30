@@ -582,7 +582,13 @@ function renderChannel(channel) {
       "aria-pressed": String(owned),
       "aria-label": `Carte ${card.label.toLowerCase()} de ${channel.name}`,
       title: owned ? `Carte ${card.label.toLowerCase()} obtenue (clic : retirer)` : `Pas encore la carte ${card.label.toLowerCase()} (clic : obtenue)`,
-      onclick: () => act("/channels/card", [channel.name], { rarity: card.rarity, owned: !owned }),
+      // Un clic suffit : bandeau « Annuler » contre les clics de travers
+      onclick: () => {
+        act("/channels/card", [channel.name], { rarity: card.rarity, owned: !owned });
+        showToast(`Carte ${card.label.toLowerCase()} ${owned ? "retirée" : "cochée"} sur ${channel.name}`, {
+          undo: () => act("/channels/card", [channel.name], { rarity: card.rarity, owned }),
+        });
+      },
     }, card.label[0]);
   }));
 
@@ -625,7 +631,8 @@ function renderChannel(channel) {
       },
     }, icon("close")));
 
-  const state = el("span", {
+  // « désactivée » : l'interrupteur éteint le dit déjà, la case reste vide (colonne alignée)
+  const state = channel.state === "parted" ? el("span", { class: "detail" }) : el("span", {
     class: `detail state-${channel.state}`,
     title: channel.reason
       ? `${channel.reason}, nouvel essai à ${new Date(channel.retryAt).toLocaleTimeString()}`
@@ -1816,12 +1823,13 @@ function toggleAddMenu(open = $("add-menu").hidden) {
   $("add-more").setAttribute("aria-expanded", String(open));
 }
 
-// Bandeau après un ajout : ouvrir la fiche ou annuler
-const toast = { timer: null, names: [] };
-function showToast(names, label) {
-  toast.names = names;
-  $("toast-text").textContent = `${names.length === 1 ? names[0] : `${names.length} chaînes`} ajoutée${names.length > 1 ? "s" : ""} · ${label}`;
-  $("toast-open").hidden = names.length !== 1;
+// Bandeau après une action (ajout, carte cochée…) : ouvrir la fiche ou annuler
+const toast = { timer: null, open: null, undo: null };
+function showToast(text, { open = null, undo = null } = {}) {
+  Object.assign(toast, { open, undo });
+  $("toast-text").textContent = text;
+  $("toast-open").hidden = !open;
+  $("toast-undo").hidden = !undo;
   $("toast").hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { $("toast").hidden = true; }, 10_000);
@@ -1841,7 +1849,11 @@ async function addChannels({ join, liveOnly }) {
       if (liveOnly) await api("/channels/mode", { channels: names, liveOnly: true });
     }
     $("names").value = "";
-    showToast(names, `${join ? "activée" : "désactivée"}${names.length > 1 ? "s" : ""}, ${liveOnly ? "si live" : "toujours"}`);
+    const s = names.length > 1 ? "s" : "";
+    showToast(`${names.length === 1 ? names[0] : `${names.length} chaînes`} ajoutée${s} · ${join ? "activée" : "désactivée"}${s}, ${liveOnly ? "si live" : "toujours"}`, {
+      open: names.length === 1 ? names[0] : null,
+      undo: () => act("/channels/remove", names),
+    });
     await refresh();
   } catch (err) {
     showError(err);
@@ -1870,11 +1882,11 @@ for (const b of document.querySelectorAll("[data-add]")) {
 }
 $("toast-open").addEventListener("click", () => {
   $("toast").hidden = true;
-  openChannel(toast.names[0]);
+  openChannel(toast.open);
 });
 $("toast-undo").addEventListener("click", () => {
   $("toast").hidden = true;
-  act("/channels/remove", toast.names);
+  toast.undo();
 });
 
 // Menu des actions groupées

@@ -228,13 +228,18 @@ button.icon-sq { min-width: 36px; min-height: 36px; padding: 0 8px; font-size: 1
 .count-badge[hidden] { display: none; }
 .pill.warn { border-color: var(--warn); }
 
-/* Bandeau après un ajout */
+/* Bandeau après une action : en bas de l'écran, visible même en bas de la liste */
 .toast {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 10px 0 0; padding: 10px 12px;
+  position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 25; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 32px);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
 }
 .toast[hidden] { display: none; }
-#toast-text { flex: 1 1 200px; }
+#toast-text { flex: 1 1 auto; }
+/* Téléphone : laisse la place au bouton « remonter en haut » */
+@media (max-width: 600px) { .toast { left: 16px; right: 84px; transform: none; width: auto; max-width: none; } }
 .bulk { display: flex; flex-wrap: wrap; gap: 8px; }
 .mode-bar { font-size: 14px; }
 .mode-bar .hint { color: var(--text); margin: 0; }
