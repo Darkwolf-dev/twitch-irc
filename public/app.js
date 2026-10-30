@@ -511,23 +511,25 @@ function renderTodo() {
   const todo = lastStatus.channels.filter(isTodo).sort(byTodo);
   box.hidden = todo.length === 0 || view === "todo";
   if (box.hidden) return box.replaceChildren();
+  // Une ligne par chaîne : avatar, nom, spectateurs, carte manquante et boosters par jour
   box.replaceChildren(
     el("div", { class: "v2-todo-head" },
-      el("h2", { id: "v2-todo-title" }, "À farmer maintenant"),
-      el("p", { class: "hint" }, "En live, pas encore finies · le moins de cartes d'abord, puis les plus généreuses en drops"),
+      el("h2", { id: "v2-todo-title", title: "En live, pas encore finies · le moins de cartes d'abord, puis les plus généreuses en drops" },
+        "À farmer"),
       el("button", { type: "button", onclick: () => setView("todo") }, `Tout voir (${todo.length})`)),
     el("div", { class: "v2-todo-grid" }, ...todo.slice(0, 4).map((c) => {
-      const score = dropScore(c.name);
-      return el("button", { type: "button", class: "v2-todo-card", onclick: () => openChannel(c.name) },
-        el("span", { class: "v2-thumb" },
-          c.live.thumbnail && el("img", { src: thumbnailUrl(c.live.thumbnail), alt: "", loading: "lazy", decoding: "async" }),
-          el("span", { class: "live-tag" }, "LIVE"),
-          el("span", { class: "v2-thumb-meta" }, `${viewers.format(c.live.viewers)} · ${shortDuration(c.live.startedAt)}`)),
-        el("span", { class: "v2-todo-body" },
-          el("strong", {}, c.name),
-          el("span", { class: "hint" }, c.live.game || "Sans catégorie"),
-          el("span", { class: "v2-missing" }, missingLabel(c),
-            score?.perDay ? el("span", { class: "hint" }, ` · ${String(score.perDay).replace(".", ",")} boosters/j`) : null)));
+      const perDay = dropScore(c.name)?.perDay;
+      return el("button", {
+        type: "button",
+        class: "v2-todo-card",
+        title: `${c.name} · ${c.live.game || "Sans catégorie"} · ${missingLabel(c)}`,
+        onclick: () => openChannel(c.name),
+      }, avatar(c), el("span", { class: "v2-todo-body" },
+        el("strong", {}, c.name),
+        el("span", { class: "hint" },
+          el("span", { class: "v2-live-n" }, viewers.format(c.live.viewers)),
+          " · ", el("span", { class: "v2-missing" }, missingLabel(c).replace("Manque : ", "sans ")),
+          perDay ? ` · ${String(perDay).replace(".", ",")}/j` : "")));
     })));
 }
 
