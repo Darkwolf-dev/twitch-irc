@@ -30,7 +30,7 @@
   <a id="token-link" href="https://www.twitch.tv/activate" target="_blank" rel="noopener" hidden>Ouvrir twitch.tv/activate ↗</a>
   <button type="button" id="token-reconnect" class="small">Reconnecter</button>
 </div>
-<main>
+<main class="v2">
   <header>
     <h1><img class="logo" src="icons/icon.svg?v=3" alt="" width="32" height="32"><span class="title-text">Twitch Deck</span></h1>
     <div id="profile-box" class="profile-actions" hidden>
@@ -45,9 +45,13 @@
     </div>
     <div class="who">
       <button type="button" id="irc" class="pill" hidden></button>
-      <button type="button" id="open-drops" class="icon-btn" aria-label="Radar à drops" title="Radar à drops" hidden>🎁</button>
+      <button type="button" id="open-drops" class="icon-btn" aria-label="Radar à drops" title="Radar à drops" hidden>
+        <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 4.5-2 2.5 2.5 0 1 1 4.5 2"/></svg>
+      </button>
       <span class="badge-wrap">
-        <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>⚙</button>
+        <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>
+          <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
         <span id="dormant-badge" class="count-badge" hidden></span>
       </span>
       <div class="account" id="account" hidden>
@@ -55,7 +59,6 @@
         <div id="account-menu" class="account-menu" role="menu" hidden>
           <p id="account-info" class="hint"></p>
           <button type="button" id="menu-settings" role="menuitem" class="menu-item">⚙ Réglages</button>
-          <a href="v2/" role="menuitem" class="menu-item">✨ Essayer la nouvelle version</a>
           <button type="button" id="logout" role="menuitem" class="menu-item danger-text">Se déconnecter</button>
         </div>
       </div>
@@ -79,64 +82,95 @@
   </section>
 
   <section id="panel" hidden>
-    <div class="sticky-bar">
-      <form id="add" class="search-row" autocomplete="off">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input id="names" type="search" placeholder="Chercher ou ajouter une chaîne" aria-label="Chercher ou ajouter des chaînes (séparées par des virgules)" autocapitalize="off" spellcheck="false" enterkeyhint="go">
-          <span id="add-split" class="add-split" hidden>
-            <button type="button" id="add-btn" class="small"></button>
-            <button type="button" id="add-more" class="small" aria-haspopup="menu" aria-expanded="false" aria-label="Autres options d'ajout" title="Autres options d'ajout">▾</button>
-            <span id="add-menu" class="account-menu" role="menu" hidden>
-              <button type="button" role="menuitem" class="menu-item" data-add="off">Ajouter désactivée</button>
-              <button type="button" role="menuitem" class="menu-item" data-add="always">Ajouter en mode « toujours »</button>
-            </span>
-          </span>
+    <div class="v2-layout">
+      <nav class="v2-side" aria-label="Afficher">
+        <div class="v2-nav-group">
+          <p class="v2-nav-title">Vues</p>
+          <button type="button" data-view="all" class="v2-nav">Toutes <span class="n" data-count="all"></span></button>
+          <button type="button" data-view="live" class="v2-nav">En live <span class="n" data-count="live"></span></button>
+          <button type="button" data-view="todo" class="v2-nav" title="En live, sans toutes les cartes, pas encore finies">À farmer <span class="n" data-count="todo"></span></button>
+          <button type="button" data-view="fav" class="v2-nav">Favoris <span class="n" data-count="fav"></span></button>
+          <button type="button" data-view="on" class="v2-nav">Activées <span class="n" data-count="on"></span></button>
+          <button type="button" data-view="off" class="v2-nav">Désactivées <span class="n" data-count="off"></span></button>
+          <button type="button" data-view="done" class="v2-nav" title="Chaînes marquées « finie » aujourd'hui (jusqu'à minuit UTC : 1 h l'hiver, 2 h l'été)">Finies <span class="n" data-count="done"></span></button>
         </div>
-        <select id="sort" class="sort-select" aria-label="Trier par" title="Trier par">
-          <option value="status">Statut</option>
-          <option value="viewers">Spectateurs</option>
-          <option value="name">Nom</option>
-          <option value="activity">Dernier message</option>
-        </select>
-        <div class="bulk-actions">
-          <button type="button" id="bulk-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Actions groupées" title="Actions groupées">⋯</button>
-          <div id="bulk-menu" class="account-menu" role="menu" hidden>
-            <p id="bulk-scope" class="menu-title"></p>
-            <button type="button" id="all-on" role="menuitem" class="menu-item">Tout activer</button>
-            <button type="button" id="all-off" role="menuitem" class="menu-item danger-text">Tout désactiver</button>
-            <div class="menu-section">
-              <p id="mode-label" class="menu-title">Quand rejoindre le chat</p>
-              <p id="mode-current" class="hint menu-hint"></p>
-              <button type="button" id="mode-always" role="menuitem" class="menu-item" title="Rejoindre le chat en permanence">Toujours</button>
-              <button type="button" id="mode-live" role="menuitem" class="menu-item" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
+        <div class="v2-nav-group">
+          <p class="v2-nav-title">Cartes streamer</p>
+          <button type="button" data-view="no-epic" class="v2-nav" title="Chaînes dont tu n'as pas encore la carte streamer épique">Sans épique <span class="n" data-count="no-epic"></span></button>
+          <button type="button" data-view="no-legendary" class="v2-nav" title="Chaînes dont tu n'as pas encore la carte streamer légendaire">Sans légendaire <span class="n" data-count="no-legendary"></span></button>
+          <button type="button" data-view="no-card" class="v2-nav" title="Chaînes dont tu n'as ni la carte épique ni la légendaire">Sans aucune carte <span class="n" data-count="no-card"></span></button>
+        </div>
+        <span id="group-sep" hidden></span>
+        <div id="group-tabs" class="v2-nav-group" role="group" aria-label="Groupes" hidden></div>
+        <div id="v2-collection" class="v2-collection"></div>
+      </nav>
+
+      <div class="v2-main">
+        <div id="v2-summary" class="v2-summary"></div>
+        <section id="v2-todo" class="v2-todo" aria-labelledby="v2-todo-title" hidden></section>
+
+        <div class="sticky-bar">
+          <form id="add" class="search-row" autocomplete="off">
+            <div class="search">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="names" type="search" placeholder="Chercher ou ajouter une chaîne" aria-label="Chercher ou ajouter des chaînes (séparées par des virgules)" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+              <span id="add-split" class="add-split" hidden>
+                <button type="button" id="add-btn" class="small"></button>
+                <button type="button" id="add-more" class="small" aria-haspopup="menu" aria-expanded="false" aria-label="Autres options d'ajout" title="Autres options d'ajout">▾</button>
+                <span id="add-menu" class="account-menu" role="menu" hidden>
+                  <button type="button" role="menuitem" class="menu-item" data-add="off">Ajouter désactivée</button>
+                  <button type="button" role="menuitem" class="menu-item" data-add="always">Ajouter en mode « toujours »</button>
+                </span>
+              </span>
             </div>
-          </div>
+            <select id="sort" class="sort-select" aria-label="Trier par" title="Trier par">
+              <option value="status">Statut</option>
+              <option value="viewers">Spectateurs</option>
+              <option value="name">Nom</option>
+              <option value="activity">Dernier message</option>
+            </select>
+            <div class="bulk-actions">
+              <button type="button" id="bulk-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Actions groupées" title="Actions groupées">⋯</button>
+              <div id="bulk-menu" class="account-menu" role="menu" hidden>
+                <p id="bulk-scope" class="menu-title"></p>
+                <button type="button" id="all-on" role="menuitem" class="menu-item">Tout activer</button>
+                <button type="button" id="all-off" role="menuitem" class="menu-item danger-text">Tout désactiver</button>
+                <div class="menu-section">
+                  <p id="mode-label" class="menu-title">Quand rejoindre le chat</p>
+                  <p id="mode-current" class="hint menu-hint"></p>
+                  <button type="button" id="mode-always" role="menuitem" class="menu-item" title="Rejoindre le chat en permanence">Toujours</button>
+                  <button type="button" id="mode-live" role="menuitem" class="menu-item" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
+                </div>
+              </div>
+            </div>
+          </form>
         </div>
-      </form>
-      <div class="chips scroller view-row" role="group" aria-label="Afficher">
-        <button type="button" data-view="all" class="chip active">Toutes <span class="n" data-count="all"></span></button>
-        <button type="button" data-view="live" class="chip">En live <span class="n" data-count="live"></span></button>
-        <button type="button" data-view="fav" class="chip">Favoris <span class="n" data-count="fav"></span></button>
-        <button type="button" data-view="on" class="chip">Activées <span class="n" data-count="on"></span></button>
-        <button type="button" data-view="off" class="chip">Désactivées <span class="n" data-count="off"></span></button>
-        <button type="button" data-view="done" class="chip" title="Chaînes marquées « finie » aujourd'hui (jusqu'à minuit UTC : 1 h l'hiver, 2 h l'été)">Finies <span class="n" data-count="done"></span></button>
-        <button type="button" data-view="no-epic" class="chip" title="Chaînes dont tu n'as pas encore la carte streamer épique">Sans épique <span class="n" data-count="no-epic"></span></button>
-        <button type="button" data-view="no-legendary" class="chip" title="Chaînes dont tu n'as pas encore la carte streamer légendaire">Sans légendaire <span class="n" data-count="no-legendary"></span></button>
-        <button type="button" data-view="no-card" class="chip" title="Chaînes dont tu n'as ni la carte épique ni la légendaire">Sans carte <span class="n" data-count="no-card"></span></button>
-        <span id="group-sep" class="chip-sep" aria-hidden="true" hidden></span>
-        <span id="group-tabs" class="chip-group" role="group" aria-label="Groupes"></span>
+        <p id="error" class="error" role="alert"></p>
+
+        <div id="toast" class="toast" role="status" hidden>
+          <span id="toast-text"></span>
+          <button type="button" id="toast-open" class="ghost small">Ouvrir la fiche</button>
+          <button type="button" id="toast-undo" class="ghost small">Annuler</button>
+        </div>
+
+        <ul id="channels"></ul>
+
+        <details id="journal" class="panel-box">
+          <summary>Journal <span id="journal-count"></span></summary>
+          <div class="journal-tools">
+            <select id="journal-level" aria-label="Niveau">
+              <option value="all">Tout</option>
+              <option value="problems">Avertissements et erreurs</option>
+            </select>
+            <input id="journal-filter" type="search" placeholder="Filtrer (chaîne, mot…)">
+            <button type="button" id="journal-download" class="ghost">Télécharger 30 jours</button>
+          </div>
+          <ol id="events"></ol>
+        </details>
+
+        <footer id="version" class="hint app-version"></footer>
       </div>
     </div>
-    <p id="error" class="error" role="alert"></p>
-
-    <div id="toast" class="toast" role="status" hidden>
-      <span id="toast-text"></span>
-      <button type="button" id="toast-open" class="ghost small">Ouvrir la fiche</button>
-      <button type="button" id="toast-undo" class="ghost small">Annuler</button>
-    </div>
-
-    <ul id="channels"></ul>
 
     <dialog id="settings-dialog" aria-labelledby="settings-title">
       <div class="dlg" tabindex="-1">
@@ -272,22 +306,6 @@
         </div>
       </div>
     </dialog>
-
-    <details id="journal" class="panel-box">
-      <summary>Journal <span id="journal-count"></span></summary>
-      <div class="journal-tools">
-        <select id="journal-level" aria-label="Niveau">
-          <option value="all">Tout</option>
-          <option value="problems">Avertissements et erreurs</option>
-        </select>
-        <input id="journal-filter" type="search" placeholder="Filtrer (chaîne, mot…)">
-        <button type="button" id="journal-download" class="ghost">Télécharger 30 jours</button>
-      </div>
-      <ol id="events"></ol>
-    </details>
-
-    <footer id="version" class="hint app-version"></footer>
-
   </section>
 </main>
 

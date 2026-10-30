@@ -238,18 +238,6 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-function externalIcon() {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("aria-hidden", "true");
-  svg.classList.add("ext");
-  const path = document.createElementNS(ns, "path");
-  path.setAttribute("d", "M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5");
-  svg.append(path);
-  return svg;
-}
-
 function formatAge(seconds) {
   if (seconds < 60) return `il y a ${seconds} s`;
   if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)} min`;
@@ -296,6 +284,71 @@ function typedNames() {
   return [...new Set($("names").value.toLowerCase().split(/[\s,;]+/).map((n) => n.replace(/^#/, "")).filter(Boolean))];
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+const ICONS = {
+  star: "m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
+  check: "m5 12 5 5 9-10",
+  external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  close: "M6 6l12 12M18 6 6 18",
+  clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+};
+
+function icon(name, cls = "v2-icon") {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", cls);
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+
+// Barre de progression ; la largeur passe par le CSSOM (les attributs style sont bloqués par la CSP)
+function bar(ratio) {
+  const fill = el("span");
+  fill.style.width = `${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%`;
+  return el("div", { class: "v2-bar" }, fill);
+}
+
+// --- Radar à drops : classement (boosters par jour) et drops du jour, relus toutes les 5 min ---
+
+const DROPS_REFRESH_MS = 5 * 60_000;
+let dropsReport = null;
+let dropsLoadedAt = 0;
+let dropsLoading = false;
+
+async function loadDrops() {
+  if (dropsLoading || Date.now() - dropsLoadedAt < DROPS_REFRESH_MS) return;
+  dropsLoading = true;
+  try {
+    dropsReport = await api("/drops");
+    dropsLoadedAt = Date.now();
+    render();
+  } catch {
+    dropsLoadedAt = Date.now() - DROPS_REFRESH_MS + 30_000; // nouvel essai dans 30 s
+  } finally {
+    dropsLoading = false;
+  }
+}
+
+function dropScore(name) {
+  return dropsReport?.channels.find((c) => c.channel === name) ?? null;
+}
+
+// --- « À farmer » : en live, au moins une carte manquante, pas finie, pas bannie ---
+
+const isTodo = (c) => Boolean(c.live && !c.watched && c.cards.length < CARDS.length && c.sanction?.type !== "ban");
+// Sans aucune carte d'abord, puis les plus généreuses en drops, puis les plus gros lives
+const byTodo = (a, b) => (a.cards.length - b.cards.length) ||
+  ((dropScore(b.name)?.score ?? 0) - (dropScore(a.name)?.score ?? 0)) ||
+  (b.live.viewers - a.live.viewers) || a.name.localeCompare(b.name);
+
+function missingLabel(channel) {
+  const missing = CARDS.filter((card) => !channel.cards.includes(card.rarity));
+  return missing.length === CARDS.length ? "Manque : les deux cartes" : `Manque : ${missing[0].label.toLowerCase()}`;
+}
+
 function visibleChannels() {
   const words = typedNames();
   return lastStatus.channels
@@ -303,6 +356,7 @@ function visibleChannels() {
       if (words.length && !words.some((w) => c.name.includes(w))) return false;
       if (view === "fav") return c.favorite;
       if (view === "live") return c.live;
+      if (view === "todo") return isTodo(c);
       if (view === "done") return c.watched;
       if (view === "no-epic") return !c.cards.includes("epic");
       if (view === "no-legendary") return !c.cards.includes("legendary");
@@ -312,7 +366,7 @@ function visibleChannels() {
       if (view.startsWith("group:")) return c.groups.includes(view.slice(6));
       return true;
     })
-    .sort(SORTS[$("sort").value] ?? SORTS.status);
+    .sort(view === "todo" ? byTodo : SORTS[$("sort").value] ?? SORTS.status);
 }
 
 // Rang « statut » : en live et activées, en live désactivées, en live marquées « fini »,
@@ -337,6 +391,7 @@ const SORTS = {
 function scopeLabel() {
   if (view === "fav") return "les favoris";
   if (view === "live") return "les lives";
+  if (view === "todo") return "les chaînes à farmer";
   if (view === "done") return "les chaînes finies";
   if (view === "no-epic") return "les chaînes sans carte épique";
   if (view === "no-legendary") return "les chaînes sans carte légendaire";
@@ -349,8 +404,8 @@ function scopeLabel() {
 function render() {
   if (!lastStatus) return;
   const { irc, counts, channels, limits } = lastStatus;
+  loadDrops();
 
-  // Revient sur « Toutes » si le groupe affiché n'existe plus
   if (view.startsWith("group:") && !lastStatus.groups.some((g) => `group:${g.name}` === view)) {
     return setView("all");
   }
@@ -358,20 +413,20 @@ function render() {
 
   const pill = $("irc");
   pill.hidden = false;
-  // Le pseudo est déjà affiché par le menu du compte : la pastille ne donne que l'état (pseudo dans l'infobulle)
-  pill.textContent = irc.paused ? "⏸ IRC en pause" : irc.connected ? "● IRC connecté" : "IRC déconnecté";
+  pill.textContent = irc.paused ? "⏸ IRC en pause" : irc.connected ? `● ${counts.joined} chats` : "IRC déconnecté";
   pill.className = `pill ${irc.connected && !irc.paused ? "state-joined" : "state-off"}`;
   pill.setAttribute("aria-pressed", String(irc.paused));
   pill.title = irc.paused
     ? "IRC en pause : aucun chat rejoint. Clique pour reconnecter."
     : `${irc.connected ? `Connecté en tant que ${irc.username}\n` : ""}${irc.lastError ? `${irc.lastError}\n` : ""}Clique pour mettre l'IRC en pause (quitte tous les chats).`;
-
   const liveError = lastStatus.live.lastError ? `\n⚠ Statut live indisponible : ${lastStatus.live.lastError}` : "";
   pill.title = `${counts.joined} connectées · ${counts.desired}/${limits.concurrent} rejointes · ` +
     `${counts.live} en live · ${counts.saved} enregistrées${liveError}\n\n${pill.title}`;
   pill.classList.toggle("warn", Boolean(liveError));
+
   const viewCounts = {
     all: counts.saved, live: counts.live, fav: counts.favorites, on: counts.enabled, off: counts.saved - counts.enabled,
+    todo: channels.filter(isTodo).length,
     done: channels.filter((c) => c.watched).length,
     "no-epic": channels.filter((c) => !c.cards.includes("epic")).length,
     "no-legendary": channels.filter((c) => !c.cards.includes("legendary")).length,
@@ -384,6 +439,9 @@ function render() {
   if (dialog.name) renderDialogHeader();
   renderAddButton();
   renderTokenBanner(lastStatus.token);
+  renderSummary(viewCounts);
+  renderTodo();
+  renderCollection();
 
   const shown = visibleChannels();
   const scope = scopeLabel();
@@ -410,48 +468,82 @@ function render() {
     const text = !channels.length ? "Aucune chaîne enregistrée"
       : view === "fav" && !counts.favorites ? "Aucun favori : clique sur ☆ à côté d'une chaîne"
       : view === "live" ? "Aucune chaîne en live pour le moment"
+      : view === "todo" ? "Rien à farmer : aucune chaîne en live sans ses cartes"
       : "Aucune chaîne dans cette vue";
     list.append(el("li", { class: "empty" }, text));
     return;
   }
 
-  for (const channel of shown) list.append(renderChannel(channel));
+  // Tri par statut ou spectateurs : les lives d'abord, sous deux intertitres
+  const sections = ["status", "viewers"].includes($("sort").value) && view !== "todo";
+  const liveCount = shown.filter((c) => c.live).length;
+  shown.forEach((channel, i) => {
+    if (sections && i === 0 && liveCount) list.append(el("li", { class: "v2-section" }, `En live · ${liveCount}`));
+    if (sections && i === liveCount && liveCount < shown.length) {
+      list.append(el("li", { class: "v2-section" }, `Hors ligne · ${shown.length - liveCount}`));
+    }
+    list.append(renderChannel(channel));
+  });
+}
+
+function renderSummary(viewCounts) {
+  const { counts, limits } = lastStatus;
+  const today = new Date().setHours(0, 0, 0, 0);
+  const dropsToday = dropsReport?.recent.filter((d) => Date.parse(d.at) >= today) ?? null;
+  const boostersToday = dropsToday?.reduce((n, d) => n + (d.boosters ?? 1), 0);
+  const tile = (label, value, detail, onclick, extra) => el("button", { type: "button", class: "v2-tile", onclick },
+    el("span", { class: "v2-tile-label" }, label),
+    el("span", { class: "v2-tile-value" }, value, " ", el("small", {}, detail)),
+    extra);
+  $("v2-summary").replaceChildren(
+    tile("En live", String(counts.live), `/ ${counts.saved}`, () => setView("live")),
+    tile("Chats rejoints", String(counts.joined), `/ ${limits.concurrent} max`, () => $("open-settings").click(),
+      bar(counts.joined / limits.concurrent)),
+    tile("Drops aujourd'hui", dropsToday ? String(dropsToday.length) : "–",
+      dropsToday ? `· ${boostersToday} booster${boostersToday > 1 ? "s" : ""}` : "", () => $("open-drops").click()),
+    tile("Finies aujourd'hui", String(viewCounts.done), `· jusqu'à ${RESET_AT}`, () => setView("done")),
+  );
+}
+
+function renderTodo() {
+  const box = $("v2-todo");
+  const todo = lastStatus.channels.filter(isTodo).sort(byTodo);
+  box.hidden = todo.length === 0 || view === "todo";
+  if (box.hidden) return box.replaceChildren();
+  box.replaceChildren(
+    el("div", { class: "v2-todo-head" },
+      el("h2", { id: "v2-todo-title" }, "À farmer maintenant"),
+      el("p", { class: "hint" }, "En live, pas encore finies · sans aucune carte d'abord, puis les plus généreuses en drops"),
+      el("button", { type: "button", onclick: () => setView("todo") }, `Tout voir (${todo.length})`)),
+    el("div", { class: "v2-todo-grid" }, ...todo.slice(0, 4).map((c) => {
+      const score = dropScore(c.name);
+      return el("button", { type: "button", class: "v2-todo-card", onclick: () => openChannel(c.name) },
+        el("span", { class: "v2-thumb" },
+          c.live.thumbnail && el("img", { src: thumbnailUrl(c.live.thumbnail), alt: "", loading: "lazy", decoding: "async" }),
+          el("span", { class: "live-tag" }, "LIVE"),
+          el("span", { class: "v2-thumb-meta" }, `${viewers.format(c.live.viewers)} · ${shortDuration(c.live.startedAt)}`)),
+        el("span", { class: "v2-todo-body" },
+          el("strong", {}, c.name),
+          el("span", { class: "hint" }, c.live.game || "Sans catégorie"),
+          el("span", { class: "v2-missing" }, missingLabel(c),
+            score?.perDay ? el("span", { class: "hint" }, ` · ${String(score.perDay).replace(".", ",")} boosters/j`) : null)));
+    })));
+}
+
+function renderCollection() {
+  const { channels } = lastStatus;
+  if (!channels.length) return $("v2-collection").replaceChildren();
+  $("v2-collection").replaceChildren(el("h2", {}, "Collection"), ...CARDS.map((card) => {
+    const owned = channels.filter((c) => c.cards.includes(card.rarity)).length;
+    return el("div", { class: `v2-meter ${card.rarity}` },
+      el("span", { class: "v2-meter-head" }, el("strong", {}, `${card.label}s`), `${owned} / ${channels.length}`),
+      bar(owned / channels.length));
+  }));
 }
 
 function renderChannel(channel) {
   const isBusy = busy.has(channel.name);
 
-  const star = el("button", {
-    class: `star${channel.favorite ? " is-fav" : ""}`,
-    disabled: isBusy,
-    "aria-pressed": String(channel.favorite),
-    "aria-label": `${channel.name} en favori`,
-    title: channel.favorite ? "Retirer des favoris" : "Ajouter aux favoris",
-    onclick: () => act("/channels/favorite", [channel.name], { favorite: !channel.favorite }),
-  }, channel.favorite ? "★" : "☆");
-
-  const seen = el("button", {
-    class: `seen${channel.watched ? " is-seen" : ""}`,
-    disabled: isBusy,
-    "aria-pressed": String(channel.watched),
-    "aria-label": `${channel.name} assez regardée aujourd'hui`,
-    title: channel.watched
-      ? `Finie pour aujourd'hui : chat quitté et chaîne reléguée jusqu'à ${RESET_AT} (clic : annuler)`
-      : `Finie pour aujourd'hui : quitter le chat et la reléguer en bas jusqu'à ${RESET_AT}`,
-    onclick: () => act("/channels/watched", [channel.name], { watched: !channel.watched }),
-  }, "✓");
-
-  const box = el("input", {
-    type: "checkbox",
-    role: "switch",
-    checked: channel.enabled,
-    disabled: isBusy,
-    "aria-label": `Activer ${channel.name}`,
-    onchange: (e) => act(e.target.checked ? "/channels/join" : "/channels/part", [channel.name]),
-  });
-  const toggle = el("label", { class: "switch" }, box, el("span"));
-
-  // Ligne 1 : nom (ouvre la fiche) + badge live + lien Twitch
   const badge = channel.live && el("span", {
     class: "live-badge",
     title: `En live depuis ${formatDuration(channel.live.startedAt)}`,
@@ -462,63 +554,18 @@ function renderChannel(channel) {
   // Drop il y a moins de 30 min : pas de nouveau drop possible avant la fin de l'attente
   const wait = channel.lastDrop && Math.ceil((Date.parse(channel.lastDrop) + DROP_COOLDOWN_MS - Date.now()) / 60_000);
   const dropped = wait > 0 && el("span", {
-    class: `drop-badge${channel.live ? "" : " is-off"}`,
+    class: `v2-drop${channel.live ? "" : " is-off"}`,
     title: `Drop à ${new Date(channel.lastDrop).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} : pas de nouveau drop possible avant ${wait} min`,
-  }, el("span", { class: "drop-icon" }, "🎁"), el("span", { class: "drop-wait" }, ` ${wait} min`));
-
+  }, icon("clock"), `drop dans ${wait} min`);
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
     title: channel.sanction.type === "ban"
       ? `Ton compte est banni de ce chat depuis le ${new Date(channel.sanction.at).toLocaleString()}`
       : `Timeout jusqu'à ${new Date(channel.sanction.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
   }, channel.sanction.type === "ban" ? "⛔ banni" : "⏱ timeout");
+  const favMark = channel.favorite ? icon("star", "v2-fav-mark") : null;
+  favMark?.setAttribute("aria-label", "Favori");
 
-  const head = el("div", { class: "head" },
-    el("button", {
-      class: "open",
-      title: `Chat, stats et réglages de ${channel.name}`,
-      onclick: () => openChannel(channel.name),
-    }, channel.name),
-    badge,
-    fresh,
-    dropped,
-    sanction,
-    ...CARDS.filter((card) => channel.cards.includes(card.rarity)).map((card) =>
-      el("span", { class: `card-badge ${card.rarity}`, title: `Carte streamer ${card.label.toLowerCase()} obtenue` }, card.label)),
-    channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"),
-    el("a", {
-      class: "twitch-link",
-      href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
-      target: "_blank",
-      rel: "noopener noreferrer",
-      title: `Ouvrir ${channel.name} sur Twitch`,
-      "aria-label": `Ouvrir ${channel.name} sur Twitch`,
-    }, externalIcon()));
-
-  // Ligne 2 : catégorie et titre du live
-  const liveLine = channel.live && el("span", {
-    class: "live-line",
-    title: `${channel.live.game} — ${channel.live.title}`,
-  }, el("span", { class: "live-game" }, channel.live.game || "Sans catégorie"),
-  el("span", { class: "live-title" }, ` · ${channel.live.title}`));
-
-  // Ligne 2 bis (hors live) : date du dernier live connu
-  const lastLiveLine = !channel.live && channel.lastLive && el("span", {
-    class: "last-live",
-    title: new Date(channel.lastLive).toLocaleString(),
-  }, `Dernier live : ${formatLastLive(channel.lastLive)}`);
-
-  // Ligne 3 : dernier message reçu
-  const last = channel.lastMessage;
-  let message = null;
-  if (last) {
-    message = el("span", { class: "last", title: `${last.user} : ${last.text}` },
-      el("time", { dateTime: last.at }, formatAge(last.ageSeconds)),
-      " · ", el("strong", {}, last.user), ` : ${last.text}`);
-  }
-
-  // Ligne 4 : seulement les exceptions — mode « toujours » (24/7) et groupes. Le mode « si live »,
-  // le plus courant, n'est plus affiché. Sur ordinateur, modifiables ici ; sur téléphone, dans la fiche.
   const modeTag = !channel.liveOnly && el("button", {
     class: "tag mode",
     disabled: isBusy,
@@ -535,30 +582,79 @@ function renderChannel(channel) {
       }
     },
   }, group));
-  // Sur la ligne du nom, pour ne pas ajouter de ligne ; « + groupe » visible au survol (ordinateur)
-  head.append(...[modeTag, ...groupTags].filter(Boolean), el("button", {
-    class: "tag add desktop-only",
-    disabled: isBusy,
-    title: `Ajouter ${channel.name} à un groupe`,
-    onclick: () => {
-      const existing = lastStatus.groups.map((g) => g.name).filter((g) => !channel.groups.includes(g));
-      const hint = existing.length ? `Groupes existants : ${existing.join(", ")}
-` : "";
-      const group = prompt(`${hint}Nom du groupe pour ${channel.name} :`, existing[0] ?? "");
-      if (group && group.trim()) act("/channels/group", [channel.name], { group: group.trim(), member: true });
-    },
-  }, "+ groupe"));
 
-  const name = el("div", { class: "name" }, head, liveLine, lastLiveLine, message);
+  const head = el("div", { class: "head" },
+    el("button", {
+      class: "open",
+      title: `Chat, stats et réglages de ${channel.name}`,
+      onclick: () => openChannel(channel.name),
+    }, channel.name),
+    favMark, badge, fresh, dropped, sanction, modeTag, ...groupTags,
+    channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"));
 
-  const remove = el("button", {
-    class: "remove desktop-only",
-    title: "Retirer de la liste",
-    "aria-label": `Retirer ${channel.name} de la liste`,
-    onclick: () => {
-      if (confirm(`Retirer ${channel.name} de la liste ?`)) act("/channels/remove", [channel.name]);
-    },
-  }, "×");
+  // Ligne 2 : jeu et titre en live ; sinon dernier message reçu, ou date du dernier live
+  const last = channel.lastMessage;
+  const sub = channel.live
+    ? el("span", { class: "live-line", title: `${channel.live.game} — ${channel.live.title}` },
+      el("span", { class: "live-game" }, channel.live.game || "Sans catégorie"),
+      el("span", { class: "live-title" }, ` · ${channel.live.title}`))
+    : last
+      ? el("span", { class: "last", title: `${last.user} : ${last.text}` },
+        el("time", { dateTime: last.at }, formatAge(last.ageSeconds)), " · ", el("strong", {}, last.user), ` : ${last.text}`)
+      : channel.lastLive && el("span", { class: "last-live", title: new Date(channel.lastLive).toLocaleString() },
+        `Dernier live : ${formatLastLive(channel.lastLive)}`);
+
+  const pips = el("div", { class: "v2-pips" }, ...CARDS.map((card) => {
+    const owned = channel.cards.includes(card.rarity);
+    return el("button", {
+      type: "button",
+      class: `v2-pip ${card.rarity}${owned ? " is-owned" : ""}`,
+      disabled: isBusy,
+      "aria-pressed": String(owned),
+      "aria-label": `Carte ${card.label.toLowerCase()} de ${channel.name}`,
+      title: owned ? `Carte ${card.label.toLowerCase()} obtenue (clic : retirer)` : `Pas encore la carte ${card.label.toLowerCase()} (clic : obtenue)`,
+      onclick: () => act("/channels/card", [channel.name], { rarity: card.rarity, owned: !owned }),
+    }, card.label[0]);
+  }));
+
+  const actions = el("div", { class: "v2-actions" },
+    el("button", {
+      type: "button",
+      class: channel.favorite ? "is-fav" : "",
+      disabled: isBusy,
+      "aria-pressed": String(channel.favorite),
+      "aria-label": `${channel.name} en favori`,
+      title: channel.favorite ? "Retirer des favoris" : "Ajouter aux favoris",
+      onclick: () => act("/channels/favorite", [channel.name], { favorite: !channel.favorite }),
+    }, icon("star")),
+    el("button", {
+      type: "button",
+      class: channel.watched ? "is-seen" : "",
+      disabled: isBusy,
+      "aria-pressed": String(channel.watched),
+      "aria-label": `${channel.name} assez regardée aujourd'hui`,
+      title: channel.watched
+        ? `Finie pour aujourd'hui : chat quitté et chaîne reléguée jusqu'à ${RESET_AT} (clic : annuler)`
+        : `Finie pour aujourd'hui : quitter le chat et la reléguer en bas jusqu'à ${RESET_AT}`,
+      onclick: () => act("/channels/watched", [channel.name], { watched: !channel.watched }),
+    }, icon("check")),
+    el("a", {
+      class: "desktop-only",
+      href: `https://www.twitch.tv/${encodeURIComponent(channel.name)}`,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: `Ouvrir ${channel.name} sur Twitch`,
+      "aria-label": `Ouvrir ${channel.name} sur Twitch`,
+    }, icon("external")),
+    el("button", {
+      type: "button",
+      class: "desktop-only",
+      title: "Retirer de la liste",
+      "aria-label": `Retirer ${channel.name} de la liste`,
+      onclick: () => {
+        if (confirm(`Retirer ${channel.name} de la liste ?`)) act("/channels/remove", [channel.name]);
+      },
+    }, icon("close")));
 
   const state = el("span", {
     class: `detail state-${channel.state}`,
@@ -566,6 +662,15 @@ function renderChannel(channel) {
       ? `${channel.reason}, nouvel essai à ${new Date(channel.retryAt).toLocaleTimeString()}`
       : STATE_HINTS[channel.state] ?? "",
   }, el("span", { class: "dot", "aria-hidden": "true" }), el("span", { class: "label" }, LABELS[channel.state] || channel.state));
+
+  const toggle = el("label", { class: "switch" }, el("input", {
+    type: "checkbox",
+    role: "switch",
+    checked: channel.enabled,
+    disabled: isBusy,
+    "aria-label": `Activer ${channel.name}`,
+    onchange: (e) => act(e.target.checked ? "/channels/join" : "/channels/part", [channel.name]),
+  }), el("span"));
 
   const classes = [channel.enabled ? "on" : "off", channel.live ? "live" : "idle", channel.watched && "watched",
     dialog.name === channel.name && "selected"];
@@ -575,7 +680,7 @@ function renderChannel(channel) {
       if (e.target.closest("button, a, input, label") || getSelection().toString()) return;
       openChannel(channel.name);
     },
-  }, star, seen, toggle, avatar(channel), name, state, remove);
+  }, avatar(channel), el("div", { class: "name" }, head, sub), pips, actions, state, toggle);
 }
 
 // Pastille à l'initiale de la chaîne, teinte stable dérivée du nom, anneau rouge pendant le live
@@ -945,17 +1050,17 @@ function renderChannelSettings(channel) {
 function renderGroupTabs() {
   const container = $("group-tabs");
   container.replaceChildren();
+  if (lastStatus.groups.length) container.append(el("p", { class: "v2-nav-title" }, "Groupes"));
   for (const group of lastStatus.groups) {
     const active = view === `group:${group.name}`;
     container.append(el("button", {
       type: "button",
-      class: `chip${active ? " active" : ""}`,
+      class: `v2-nav${active ? " active" : ""}`,
       "aria-pressed": String(active),
       onclick: () => setView(active ? "all" : `group:${group.name}`),
-    }, `${group.name} · ${group.count}`));
+    }, group.name, el("span", { class: "n" }, String(group.count))));
   }
   container.hidden = lastStatus.groups.length === 0;
-  $("group-sep").hidden = container.hidden;
 }
 
 function setView(value) {
@@ -1776,7 +1881,7 @@ async function addChannels({ join, liveOnly }) {
   }
 }
 
-$("names").addEventListener("input", () => render()); // par son nom : la v2 remplace render
+$("names").addEventListener("input", render);
 // Entrée : ajoute les nouveaux noms, sinon ouvre la fiche si une seule chaîne correspond
 $("add").addEventListener("submit", (e) => {
   e.preventDefault();

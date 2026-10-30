@@ -591,14 +591,8 @@ const INDEX_HTML = fs.readFileSync(path.join(__dirname, "..", "public", "index.h
 app.get(["/", "/index.html"], (req, res) => {
   res.set({ ...PAGE_HEADERS, "Cache-Control": "no-cache", "Content-Type": "text/html; charset=utf-8" }).send(INDEX_HTML);
 });
-// Nouvelle présentation en essai sur /v2/ : même app.js et app.css, plus v2.js et v2.css
-const V2_HTML = fs.readFileSync(path.join(__dirname, "..", "public", "v2", "index.html"), "utf8")
-  .replace(/(href|src)="([^"]+\.(?:css|js))"/g, `$1="$2?v=${APP_VERSION.id}"`);
-app.get(["/v2", "/v2/index.html"], (req, res) => {
-  // Sans la barre finale, les chemins relatifs de la page (v2.js, ../app.js) seraient faux
-  if (req.path === "/v2") return res.redirect(301, "/v2/");
-  res.set({ ...PAGE_HEADERS, "Cache-Control": "no-cache", "Content-Type": "text/html; charset=utf-8" }).send(V2_HTML);
-});
+// L'ancienne adresse d'essai de la nouvelle présentation (/v2/) mène au panneau
+app.get(["/v2", "/v2/index.html"], (req, res) => res.redirect(301, "/"));
 app.use(
   express.static(path.join(__dirname, "..", "public"), {
     setHeaders(res, filePath) {
