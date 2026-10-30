@@ -344,12 +344,6 @@ const byTodo = (a, b) => (a.cards.length - b.cards.length) ||
   ((dropScore(b.name)?.score ?? 0) - (dropScore(a.name)?.score ?? 0)) ||
   (b.live.viewers - a.live.viewers) || a.name.localeCompare(b.name);
 
-function missingLabel(channel) {
-  const missing = CARDS.filter((card) => !channel.cards.includes(card.rarity));
-  if (!missing.length) return "Cartes complètes";
-  return missing.length === CARDS.length ? "Manque : les deux cartes" : `Manque : ${missing[0].label.toLowerCase()}`;
-}
-
 function visibleChannels() {
   const words = typedNames();
   return lastStatus.channels
@@ -441,7 +435,6 @@ function render() {
   renderAddButton();
   renderTokenBanner(lastStatus.token);
   renderSummary(viewCounts);
-  renderTodo();
   renderCollection();
 
   const shown = visibleChannels();
@@ -504,33 +497,6 @@ function renderSummary(viewCounts) {
       dropsToday ? `· ${boostersToday} booster${boostersToday > 1 ? "s" : ""}` : "", () => $("open-drops").click()),
     tile("Finies aujourd'hui", String(viewCounts.done), `· jusqu'à ${RESET_AT}`, () => setView("done")),
   );
-}
-
-function renderTodo() {
-  const box = $("v2-todo");
-  const todo = lastStatus.channels.filter(isTodo).sort(byTodo);
-  box.hidden = todo.length === 0 || view === "todo";
-  if (box.hidden) return box.replaceChildren();
-  // Une ligne par chaîne : avatar, nom, spectateurs, carte manquante et boosters par jour
-  box.replaceChildren(
-    el("div", { class: "v2-todo-head" },
-      el("h2", { id: "v2-todo-title", title: "En live, pas encore finies · le moins de cartes d'abord, puis les plus généreuses en drops" },
-        "À farmer"),
-      el("button", { type: "button", onclick: () => setView("todo") }, `Tout voir (${todo.length})`)),
-    el("div", { class: "v2-todo-grid" }, ...todo.slice(0, 4).map((c) => {
-      const perDay = dropScore(c.name)?.perDay;
-      return el("button", {
-        type: "button",
-        class: "v2-todo-card",
-        title: `${c.name} · ${c.live.game || "Sans catégorie"} · ${missingLabel(c)}`,
-        onclick: () => openChannel(c.name),
-      }, avatar(c), el("span", { class: "v2-todo-body" },
-        el("strong", {}, c.name),
-        el("span", { class: "hint" },
-          el("span", { class: "v2-live-n" }, viewers.format(c.live.viewers)),
-          " · ", el("span", { class: "v2-missing" }, missingLabel(c).replace("Manque : ", "sans ")),
-          perDay ? ` · ${String(perDay).replace(".", ",")}/j` : "")));
-    })));
 }
 
 function renderCollection() {

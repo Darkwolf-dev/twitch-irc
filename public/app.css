@@ -698,25 +698,6 @@ button.v2-tile:hover { border-color: var(--accent-text); }
 .v2-tile-value small { font-size: 13px; font-weight: 500; color: var(--muted); }
 .v2-tile .v2-bar { height: 4px; margin-top: 6px; }
 
-/* --- À farmer maintenant --- */
-.v2-todo { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
-.v2-todo[hidden] { display: none; }
-.v2-todo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.v2-todo-head h2 { margin: 0; font-size: 14px; }
-.v2-todo-head button { background: none; color: var(--accent-text); min-height: 28px; padding: 0 4px; font-size: 13px; font-weight: 600; }
-.v2-todo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
-button.v2-todo-card {
-  display: flex; align-items: center; gap: 10px; min-height: 0; padding: 6px 10px 6px 6px;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); text-align: left;
-}
-button.v2-todo-card:hover { border-color: var(--accent-text); }
-button.v2-todo-card .avatar { width: 32px; height: 32px; font-size: 13px; }
-.v2-todo-body { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-.v2-todo-body strong, .v2-todo-body .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.v2-todo-body .hint { margin: 0; font-size: 12px; }
-.v2-live-n { color: var(--live); font-weight: 600; }
-.v2-missing { font-weight: 600; color: var(--epic); }
-
 /* --- Liste --- */
 .v2 .sticky-bar { margin: 0; padding: 8px 0; border-bottom: 0; }
 .v2 ul#channels { margin-top: 8px; overflow: hidden; }
@@ -787,8 +768,6 @@ body.panel-open main.v2 { margin: 0 var(--panel-w) 0 0; max-width: none; }
   button.v2-tile .v2-bar { display: none; }
   .v2-tile-value { order: -1; font-size: 15px; }
   .v2-tile-value small { display: none; }
-  .v2-todo-grid { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .v2-todo-grid > * { flex: 0 0 auto; max-width: 70%; }
   .v2 #channels li { gap: 10px; padding: 10px; }
   .v2 #channels .avatar { display: grid; width: 34px; height: 34px; font-size: 13px; }
   .v2 #channels li .detail { min-width: 0; }
