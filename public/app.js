@@ -1776,7 +1776,7 @@ async function addChannels({ join, liveOnly }) {
   }
 }
 
-$("names").addEventListener("input", render);
+$("names").addEventListener("input", () => render()); // par son nom : la v2 remplace render
 // Entrée : ajoute les nouveaux noms, sinon ouvre la fiche si une seule chaîne correspond
 $("add").addEventListener("submit", (e) => {
   e.preventDefault();

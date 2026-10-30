@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Twitch Deck</title>
+<meta name="theme-color" content="#0f0f12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Twitch Deck">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- use-credentials : le manifeste passe derrière Cloudflare Access, il a besoin du cookie -->
+<link rel="manifest" href="../manifest.webmanifest" crossorigin="use-credentials">
+<link rel="icon" href="../icons/icon.svg?v=3" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png?v=3">
+<!-- v2 : même socle que la v1 (app.css, app.js), présentation remplacée par v2.css et v2.js -->
+<link rel="stylesheet" href="../app.css">
+<link rel="stylesheet" href="v2.css">
+</head>
+<body>
+<div id="offline-banner" class="offline-banner" role="status" hidden>
+  <span class="spinner" aria-hidden="true"></span>
+  Connexion au serveur perdue (redémarrage ou mise à jour ?) · reconnexion automatique…
+</div>
+<div id="update-banner" class="update-banner" role="status" hidden>
+  Nouvelle version disponible · rechargement dès que tu as fini de taper
+  <button type="button" id="update-now" class="small">Recharger</button>
+</div>
+<div id="token-banner" class="token-banner" role="alert" hidden>
+  <span id="token-text"></span>
+  <a id="token-link" href="https://www.twitch.tv/activate" target="_blank" rel="noopener" hidden>Ouvrir twitch.tv/activate ↗</a>
+  <button type="button" id="token-reconnect" class="small">Reconnecter</button>
+</div>
+<main class="v2">
+  <header>
+    <h1><img class="logo" src="../icons/icon.svg?v=3" alt="" width="32" height="32"><span class="title-text">Twitch Deck</span><span class="v2-tag">v2</span></h1>
+    <div id="profile-box" class="profile-actions" hidden>
+      <select id="profile-select" aria-label="Profil"></select>
+      <span id="profile-state" class="hint"></span>
+      <button type="button" id="profile-menu-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Gérer les profils" title="Gérer les profils">⋯</button>
+      <div id="profile-menu" class="account-menu" role="menu" hidden>
+        <button type="button" id="profile-new" role="menuitem" class="menu-item">＋ Enregistrer l'état actuel comme nouveau profil…</button>
+        <button type="button" id="profile-update" role="menuitem" class="menu-item">↻ Mettre à jour le profil actuel</button>
+        <div id="profile-delete-list" class="menu-section"></div>
+      </div>
+    </div>
+    <div class="who">
+      <button type="button" id="irc" class="pill" hidden></button>
+      <button type="button" id="open-drops" class="icon-btn" aria-label="Radar à drops" title="Radar à drops" hidden>
+        <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 4.5-2 2.5 2.5 0 1 1 4.5 2"/></svg>
+      </button>
+      <span class="badge-wrap">
+        <button type="button" id="open-settings" class="icon-btn" aria-label="Réglages" title="Réglages" hidden>
+          <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <span id="dormant-badge" class="count-badge" hidden></span>
+      </span>
+      <div class="account" id="account" hidden>
+        <button type="button" id="me" class="me" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu"></button>
+        <div id="account-menu" class="account-menu" role="menu" hidden>
+          <p id="account-info" class="hint"></p>
+          <button type="button" id="menu-settings" role="menuitem" class="menu-item">⚙ Réglages</button>
+          <a href="/" role="menuitem" class="menu-item">Revenir à l'ancienne version</a>
+          <button type="button" id="logout" role="menuitem" class="menu-item danger-text">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="login" hidden>
+    <button type="button" id="twitch-login" class="twitch" hidden>Se connecter avec Twitch</button>
+    <details id="secret-login">
+      <summary>Utiliser le secret de l'API</summary>
+      <form id="secret-form">
+        <label for="secret">Secret de l'API</label>
+        <div class="row">
+          <input id="secret" type="password" autocomplete="current-password" required>
+          <button>Connexion</button>
+        </div>
+        <label class="check"><input id="remember" type="checkbox" checked> Se souvenir sur cet appareil</label>
+      </form>
+    </details>
+    <p id="login-error" class="error"></p>
+  </section>
+
+  <section id="panel" hidden>
+    <div class="v2-layout">
+      <nav class="v2-side" aria-label="Afficher">
+        <div class="v2-nav-group">
+          <p class="v2-nav-title">Vues</p>
+          <button type="button" data-view="all" class="v2-nav">Toutes <span class="n" data-count="all"></span></button>
+          <button type="button" data-view="live" class="v2-nav">En live <span class="n" data-count="live"></span></button>
+          <button type="button" data-view="todo" class="v2-nav" title="En live, sans toutes les cartes, pas encore finies">À farmer <span class="n" data-count="todo"></span></button>
+          <button type="button" data-view="fav" class="v2-nav">Favoris <span class="n" data-count="fav"></span></button>
+          <button type="button" data-view="on" class="v2-nav">Activées <span class="n" data-count="on"></span></button>
+          <button type="button" data-view="off" class="v2-nav">Désactivées <span class="n" data-count="off"></span></button>
+          <button type="button" data-view="done" class="v2-nav" title="Chaînes marquées « finie » aujourd'hui (jusqu'à minuit UTC : 1 h l'hiver, 2 h l'été)">Finies <span class="n" data-count="done"></span></button>
+        </div>
+        <div class="v2-nav-group">
+          <p class="v2-nav-title">Cartes streamer</p>
+          <button type="button" data-view="no-epic" class="v2-nav" title="Chaînes dont tu n'as pas encore la carte streamer épique">Sans épique <span class="n" data-count="no-epic"></span></button>
+          <button type="button" data-view="no-legendary" class="v2-nav" title="Chaînes dont tu n'as pas encore la carte streamer légendaire">Sans légendaire <span class="n" data-count="no-legendary"></span></button>
+          <button type="button" data-view="no-card" class="v2-nav" title="Chaînes dont tu n'as ni la carte épique ni la légendaire">Sans aucune carte <span class="n" data-count="no-card"></span></button>
+        </div>
+        <span id="group-sep" hidden></span>
+        <div id="group-tabs" class="v2-nav-group" role="group" aria-label="Groupes" hidden></div>
+        <div id="v2-collection" class="v2-collection"></div>
+      </nav>
+
+      <div class="v2-main">
+        <div id="v2-summary" class="v2-summary"></div>
+        <section id="v2-todo" class="v2-todo" aria-labelledby="v2-todo-title" hidden></section>
+
+        <div class="sticky-bar">
+          <form id="add" class="search-row" autocomplete="off">
+            <div class="search">
+              <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="names" type="search" placeholder="Chercher ou ajouter une chaîne" aria-label="Chercher ou ajouter des chaînes (séparées par des virgules)" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+              <span id="add-split" class="add-split" hidden>
+                <button type="button" id="add-btn" class="small"></button>
+                <button type="button" id="add-more" class="small" aria-haspopup="menu" aria-expanded="false" aria-label="Autres options d'ajout" title="Autres options d'ajout">▾</button>
+                <span id="add-menu" class="account-menu" role="menu" hidden>
+                  <button type="button" role="menuitem" class="menu-item" data-add="off">Ajouter désactivée</button>
+                  <button type="button" role="menuitem" class="menu-item" data-add="always">Ajouter en mode « toujours »</button>
+                </span>
+              </span>
+            </div>
+            <select id="sort" class="sort-select" aria-label="Trier par" title="Trier par">
+              <option value="status">Statut</option>
+              <option value="viewers">Spectateurs</option>
+              <option value="name">Nom</option>
+              <option value="activity">Dernier message</option>
+            </select>
+            <div class="bulk-actions">
+              <button type="button" id="bulk-btn" class="ghost icon-sq" aria-haspopup="menu" aria-expanded="false" aria-label="Actions groupées" title="Actions groupées">⋯</button>
+              <div id="bulk-menu" class="account-menu" role="menu" hidden>
+                <p id="bulk-scope" class="menu-title"></p>
+                <button type="button" id="all-on" role="menuitem" class="menu-item">Tout activer</button>
+                <button type="button" id="all-off" role="menuitem" class="menu-item danger-text">Tout désactiver</button>
+                <div class="menu-section">
+                  <p id="mode-label" class="menu-title">Quand rejoindre le chat</p>
+                  <p id="mode-current" class="hint menu-hint"></p>
+                  <button type="button" id="mode-always" role="menuitem" class="menu-item" title="Rejoindre le chat en permanence">Toujours</button>
+                  <button type="button" id="mode-live" role="menuitem" class="menu-item" title="Rejoindre le chat seulement pendant les lives">Seulement en live</button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+        <p id="error" class="error" role="alert"></p>
+
+        <div id="toast" class="toast" role="status" hidden>
+          <span id="toast-text"></span>
+          <button type="button" id="toast-open" class="ghost small">Ouvrir la fiche</button>
+          <button type="button" id="toast-undo" class="ghost small">Annuler</button>
+        </div>
+
+        <ul id="channels"></ul>
+
+        <details id="journal" class="panel-box">
+          <summary>Journal <span id="journal-count"></span></summary>
+          <div class="journal-tools">
+            <select id="journal-level" aria-label="Niveau">
+              <option value="all">Tout</option>
+              <option value="problems">Avertissements et erreurs</option>
+            </select>
+            <input id="journal-filter" type="search" placeholder="Filtrer (chaîne, mot…)">
+            <button type="button" id="journal-download" class="ghost">Télécharger 30 jours</button>
+          </div>
+          <ol id="events"></ol>
+        </details>
+
+        <footer id="version" class="hint app-version"></footer>
+      </div>
+    </div>
+
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dlg" tabindex="-1">
+        <div class="dlg-head">
+          <div class="dlg-titles"><h2 id="settings-title">Réglages</h2></div>
+          <button type="button" id="settings-close" class="close" aria-label="Fermer">×</button>
+        </div>
+        <div class="tabs scroller" role="tablist">
+          <button type="button" role="tab" data-stab="general">Général</button>
+          <button type="button" role="tab" data-stab="notifs">Notifications</button>
+          <button type="button" role="tab" data-stab="list">Liste</button>
+          <button type="button" role="tab" data-stab="security">Sécurité <span id="sanctions-count"></span></button>
+        </div>
+
+        <div id="stab-general" class="tab-panel settings-tab" role="tabpanel">
+          <form id="settings-form" class="card">
+            <h3>Chats rejoints en même temps</h3>
+            <div class="row">
+              <input id="max-concurrent" type="number" min="1" step="1" inputmode="numeric" required aria-label="Nombre maximum de chats rejoints">
+              <button>Enregistrer</button>
+            </div>
+            <p class="hint">Moins tu es présent dans de chats à la fois, moins ton compte ressemble à un bot. Au-delà du plafond : priorité aux chaînes « toujours », puis aux favoris, puis aux plus gros lives.</p>
+            <p id="settings-status" class="hint" role="status"></p>
+          </form>
+
+          <div class="card">
+            <h3>Ajout de chaînes</h3>
+            <p class="hint">Options appliquées quand tu ajoutes une chaîne depuis la barre de recherche (le menu ▾ du bouton « Ajouter » permet d'en choisir d'autres ponctuellement).</p>
+            <label class="check"><input id="add-join" type="checkbox" checked> Activer directement</label>
+            <label class="check"><input id="add-live" type="checkbox" checked> Seulement pendant le live</label>
+          </div>
+
+          <form id="schedule-form" class="card">
+            <h3>Plage horaire</h3>
+            <p class="hint">En dehors de la plage, les chaînes « si live » ne sont pas rejointes (les chaînes « toujours » ne sont pas concernées).</p>
+            <label class="check"><input id="schedule-enabled" type="checkbox"> Activer la plage horaire</label>
+            <div class="row times">
+              <label>De <input id="schedule-start" type="time" required></label>
+              <label>à <input id="schedule-end" type="time" required></label>
+            </div>
+            <label for="schedule-tz">Fuseau horaire</label>
+            <input id="schedule-tz" autocomplete="off" placeholder="Europe/Paris">
+            <div class="bulk actions"><button>Enregistrer</button></div>
+            <p id="schedule-status" class="hint" role="status"></p>
+          </form>
+        </div>
+
+        <div id="stab-notifs" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <form id="discord-form">
+            <div class="card">
+              <h3>Connexion à Discord</h3>
+              <label for="discord-webhook">Adresse du webhook</label>
+              <input id="discord-webhook" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…">
+              <label for="discord-user-id">Ton identifiant Discord, pour être @ (optionnel)</label>
+              <input id="discord-user-id" inputmode="numeric" autocomplete="off" placeholder="ex. 123456789012345678">
+              <p class="hint id-help">Discord → Paramètres → Avancés → Mode développeur, puis clic droit sur ton pseudo → « Copier l'identifiant utilisateur ».</p>
+              <div class="bulk">
+                <button type="button" id="discord-test" class="ghost">Envoyer un test</button>
+                <button type="button" id="discord-remove" class="ghost">Supprimer le webhook</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Quoi notifier</h3>
+              <label for="mention-keywords">Mentions : mots qui déclenchent une notification</label>
+              <input id="mention-keywords" autocomplete="off" placeholder="ton pseudo Twitch (par défaut)">
+              <label for="live-alerts">Quand un favori ★ passe en live</label>
+              <select id="live-alerts">
+                <option value="on">Message sur Discord</option>
+                <option value="ping">Message + me mentionner</option>
+                <option value="off">Rien</option>
+              </select>
+              <label for="nocard-alerts">Quand une chaîne dont tu n'as aucune carte passe en live</label>
+              <select id="nocard-alerts">
+                <option value="on">Message sur Discord</option>
+                <option value="ping">Message + me mentionner</option>
+                <option value="off">Rien</option>
+              </select>
+              <p class="hint">Toujours envoyés : timeouts et bans de ton compte, alertes de sécurité.</p>
+            </div>
+
+            <div class="card">
+              <h3>Heures calmes</h3>
+              <label class="check"><input id="quiet-enabled" type="checkbox"> Activer les heures calmes</label>
+              <div class="row times">
+                <label>De <input id="quiet-start" type="time"></label>
+                <label>à <input id="quiet-end" type="time"></label>
+              </div>
+              <p class="hint">Notifications en silencieux (sans son ni push, mention et pastille gardées). Les alertes de sécurité sonnent toujours.</p>
+            </div>
+
+            <div class="sticky-actions">
+              <button>Enregistrer les notifications</button>
+              <p id="discord-status" class="hint" role="status"></p>
+            </div>
+          </form>
+        </div>
+
+        <div id="stab-list" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <form id="dormant-form" class="card">
+            <h3>Nettoyage des chaînes endormies</h3>
+            <p class="hint">Suggère de retirer les chaînes sans live depuis ce nombre de jours (suivi du serveur et dernière VOD Twitch).</p>
+            <div class="row">
+              <input id="dormant-days" type="number" min="7" max="365" step="1" inputmode="numeric" required aria-label="Nombre de jours">
+              <button>Enregistrer</button>
+            </div>
+            <div class="bulk actions"><button type="button" id="dormant-open-2" class="ghost">Voir les chaînes endormies</button></div>
+            <p id="dormant-kept" class="hint"></p>
+          </form>
+          <div class="card">
+            <h3>Sauvegardes</h3>
+            <p id="backup-status" class="hint"></p>
+          </div>
+        </div>
+
+        <div id="stab-security" class="tab-panel settings-tab" role="tabpanel" hidden>
+          <div id="security" class="card">
+            <h3>Appareils connectés</h3>
+            <ul id="session-list" class="session-list"></ul>
+            <div class="bulk"><button type="button" id="revoke-others" class="ghost">Déconnecter tous les autres appareils</button></div>
+          </div>
+          <div class="card">
+            <h3>Connexion par secret</h3>
+            <label class="check"><input id="allow-secret" type="checkbox"> Autoriser la connexion avec le secret de l'API</label>
+            <p class="hint">Décoche une fois la connexion Twitch en place : le secret ne servira plus qu'en dépannage depuis le serveur.</p>
+            <p id="security-status" class="hint" role="status"></p>
+          </div>
+          <div class="card">
+            <h3>Sanctions de ton compte</h3>
+            <p class="hint">Timeouts et bans reçus. Des bans sur plusieurs chaînes peuvent signifier que ton compte est pris pour un bot.</p>
+            <ul id="sanction-list" class="session-list"></ul>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  </section>
+</main>
+
+<button type="button" id="to-top" class="to-top" aria-label="Remonter en haut" title="Remonter en haut">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+
+<dialog id="channel-dialog" aria-labelledby="dlg-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="dlg-title"></h2>
+        <p id="dlg-sub"></p>
+      </div>
+      <a id="dlg-twitch" class="ghost-link" target="_blank" rel="noopener noreferrer">Twitch ↗</a>
+      <button type="button" id="dlg-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="settings">Aperçu</button>
+      <button type="button" role="tab" data-tab="stats">Stats 7 jours</button>
+      <button type="button" role="tab" data-tab="chat">Chat</button>
+    </div>
+    <div id="tab-settings" class="tab-panel" role="tabpanel"></div>
+    <div id="tab-stats" class="tab-panel" role="tabpanel" hidden></div>
+    <div id="tab-chat" class="tab-panel" role="tabpanel" hidden>
+      <p id="chat-note" class="hint" hidden></p>
+      <ol id="chat-log" class="chat-log" aria-live="polite"></ol>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dormant-dialog" aria-labelledby="dormant-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="dormant-title">🧹 Chaînes endormies</h2>
+        <p id="dormant-sub"></p>
+      </div>
+      <button type="button" id="dormant-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tab-panel">
+      <label class="check"><input id="dormant-all" type="checkbox" checked> Tout sélectionner</label>
+      <ul id="dormant-list" class="dormant-list"></ul>
+      <p class="hint">« Garder » : la chaîne ne sera plus jamais proposée (réversible dans Réglages → Nettoyage). Une sauvegarde de la liste est faite avant chaque retrait.</p>
+      <div class="bulk actions">
+        <button type="button" id="dormant-remove">Retirer la sélection</button>
+        <button type="button" id="dormant-disable" class="ghost">Seulement désactiver</button>
+      </div>
+      <p id="dormant-status" class="hint" role="status"></p>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="drops-dialog" aria-labelledby="drops-title">
+  <div class="dlg" tabindex="-1">
+    <div class="dlg-head">
+      <div class="dlg-titles">
+        <h2 id="drops-title">🎁 Radar à drops</h2>
+        <p>Les chaînes qui droppent le plus passent en premier quand le plafond de chats est atteint</p>
+      </div>
+      <button type="button" id="drops-close" class="close" aria-label="Fermer">×</button>
+    </div>
+    <div class="tab-panel drops-body">
+      <section>
+        <h3>Classement · 30 jours</h3>
+        <p class="hint">Seules les chaînes rejointes peuvent avoir des drops repérés (légende sous le tableau).</p>
+        <div class="drops-table-wrap"><table class="drops-table">
+          <thead><tr><th>Chaîne</th><th>Drops</th><th>Boosters</th><th>Présence</th><th>Boosters / jour</th><th>Moment du live</th><th>Dernier</th></tr></thead>
+          <tbody id="drops-ranking"></tbody>
+        </table></div>
+        <ul class="hint drops-legend">
+          <li><strong>Drops</strong> : annonces « 🎁 Drop ChatDeck » vues sur 30 jours. <strong>Boosters</strong> : total reçu par ces drops.</li>
+          <li><strong>Présence</strong> : heures passées dans le chat pendant le live, et nombre de jours (un jour compte dès 10 min).</li>
+          <li><strong>Boosters / jour</strong> : boosters ÷ jours de présence. C'est ce chiffre qui décide quelles chaînes passent en premier quand le plafond de chats est atteint.</li>
+          <li><strong>Moment du live</strong> : quand les drops tombent, comptés depuis le début du live. 17 barres de gauche à droite : une par tranche de 30 min (l'écart minimum entre deux drops) jusqu'à 8 h, puis <em>&gt; 8 h</em>. Plus la barre est haute, plus il y a eu de drops à ce moment. Survole la case pour le détail. Pour une chaîne 24h/24, tout tombe dans la dernière barre.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Derniers drops</h3>
+        <ul id="drops-recent" class="drops-list"></ul>
+        <form id="drops-manual" class="drops-manual">
+          <span class="hint">Drop raté par le radar ?</span>
+          <input id="drops-manual-channel" placeholder="chaîne" aria-label="Chaîne" required>
+          <input id="drops-manual-boosters" type="number" min="1" max="50" value="1" aria-label="Boosters" title="Boosters">
+          <select id="drops-manual-moment" aria-label="Moment du live"></select>
+          <button type="submit" class="small">Ajouter</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<script src="../app.js"></script>
+<script src="v2.js"></script>
+</body>
+</html>
