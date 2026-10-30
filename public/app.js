@@ -336,16 +336,17 @@ function dropScore(name) {
   return dropsReport?.channels.find((c) => c.channel === name) ?? null;
 }
 
-// --- « À farmer » : en live, au moins une carte manquante, pas finie, pas bannie ---
+// --- « À farmer » : en live, pas finie, pas bannie (cartes complètes comprises, pour les boosters) ---
 
-const isTodo = (c) => Boolean(c.live && !c.watched && c.cards.length < CARDS.length && c.sanction?.type !== "ban");
-// Sans aucune carte d'abord, puis les plus généreuses en drops, puis les plus gros lives
+const isTodo = (c) => Boolean(c.live && !c.watched && c.sanction?.type !== "ban");
+// Le moins de cartes d'abord (complètes en dernier), puis les plus généreuses en drops, puis les plus gros lives
 const byTodo = (a, b) => (a.cards.length - b.cards.length) ||
   ((dropScore(b.name)?.score ?? 0) - (dropScore(a.name)?.score ?? 0)) ||
   (b.live.viewers - a.live.viewers) || a.name.localeCompare(b.name);
 
 function missingLabel(channel) {
   const missing = CARDS.filter((card) => !channel.cards.includes(card.rarity));
+  if (!missing.length) return "Cartes complètes";
   return missing.length === CARDS.length ? "Manque : les deux cartes" : `Manque : ${missing[0].label.toLowerCase()}`;
 }
 
@@ -468,7 +469,7 @@ function render() {
     const text = !channels.length ? "Aucune chaîne enregistrée"
       : view === "fav" && !counts.favorites ? "Aucun favori : clique sur ☆ à côté d'une chaîne"
       : view === "live" ? "Aucune chaîne en live pour le moment"
-      : view === "todo" ? "Rien à farmer : aucune chaîne en live sans ses cartes"
+      : view === "todo" ? "Rien à farmer : aucune chaîne en live pas encore finie"
       : "Aucune chaîne dans cette vue";
     list.append(el("li", { class: "empty" }, text));
     return;
@@ -513,7 +514,7 @@ function renderTodo() {
   box.replaceChildren(
     el("div", { class: "v2-todo-head" },
       el("h2", { id: "v2-todo-title" }, "À farmer maintenant"),
-      el("p", { class: "hint" }, "En live, pas encore finies · sans aucune carte d'abord, puis les plus généreuses en drops"),
+      el("p", { class: "hint" }, "En live, pas encore finies · le moins de cartes d'abord, puis les plus généreuses en drops"),
       el("button", { type: "button", onclick: () => setView("todo") }, `Tout voir (${todo.length})`)),
     el("div", { class: "v2-todo-grid" }, ...todo.slice(0, 4).map((c) => {
       const score = dropScore(c.name);
