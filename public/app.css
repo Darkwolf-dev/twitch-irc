@@ -789,3 +789,30 @@ body.panel-open main.v2 { margin: 0 var(--panel-w) 0 0; max-width: none; }
   .v2-actions > .desktop-only { display: none; }
   .v2 #channels li .detail { order: 5; margin-left: auto; }
 }
+
+/* --- Affichage compact (bouton à côté du tri) : une ligne de 36 px par chaîne --- */
+.search-row #density { min-width: 44px; min-height: 44px; border-radius: 10px; }
+#density[aria-pressed="true"] { color: var(--accent-text); border-color: var(--accent-text); background: var(--accent-soft); }
+body.compact .v2 #channels li:not(.v2-section):not(.empty) { min-height: 36px; padding: 0 12px; gap: 10px; }
+body.compact .v2 #channels li.v2-section { padding: 5px 12px; font-size: 11.5px; }
+body.compact .v2 #channels .avatar { width: 22px; height: 22px; font-size: 11px; outline-offset: 1px; }
+body.compact li .name { flex-direction: row; align-items: center; gap: 10px; }
+body.compact li .head { flex: none; flex-wrap: nowrap; max-width: 60%; overflow: hidden; }
+/* Le liseré rouge suffit à dire « en live » ; titre, mode et groupes restent dans la fiche */
+body.compact li .head .tag, body.compact li .live-tag, body.compact li .live-title { display: none; }
+body.compact li .live-line, body.compact li .last, body.compact li .last-live { flex: 1; min-width: 0; }
+body.compact button.v2-pip { width: 18px; height: 18px; font-size: 10px; }
+body.compact .v2-actions > * { width: 28px; height: 28px; }
+body.compact .v2 #channels li .detail { min-width: 8px; } /* pastille ou case vide : colonnes alignées */
+body.compact li .detail .label { display: none; }
+body.compact .switch { width: 32px; height: 18px; }
+body.compact .switch span::after { top: 3px; left: 3px; width: 12px; height: 12px; }
+body.compact .switch input:checked + span::after { transform: translateX(14px); }
+@media (max-width: 600px) {
+  body.compact .v2 #channels li:not(.v2-section):not(.empty) { flex-wrap: nowrap; padding: 0 10px; }
+  body.compact .v2 #channels li > * { order: 0; margin-left: 0; }
+  body.compact .v2 #channels li .name { flex: 1 1 auto; min-width: 0; }
+  body.compact li .head { max-width: 100%; }
+  body.compact .v2 #channels li .v2-actions, body.compact li .live-line, body.compact li .last,
+  body.compact li .last-live, body.compact .v2 #channels li .detail { display: none; }
+}

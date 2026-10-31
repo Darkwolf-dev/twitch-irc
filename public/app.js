@@ -1941,6 +1941,16 @@ $("sort").addEventListener("change", () => {
   try { localStorage.setItem(SORT_KEY, $("sort").value); } catch {}
   render();
 });
+// Affichage compact : une ligne par chaîne, mémorisé sur l'appareil
+const DENSITY_KEY = "twitch-irc-density";
+function setCompact(on) {
+  document.body.classList.toggle("compact", on);
+  $("density").setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem(DENSITY_KEY, on ? "compact" : "comfort"); } catch {}
+}
+try { setCompact(localStorage.getItem(DENSITY_KEY) === "compact"); } catch { setCompact(false); }
+$("density").addEventListener("click", () => setCompact(!document.body.classList.contains("compact")));
+
 $("journal").addEventListener("toggle", () => { if ($("journal").open) refreshEvents(); });
 $("journal-level").addEventListener("change", renderEvents);
 $("journal-filter").addEventListener("input", renderEvents);
