@@ -205,6 +205,7 @@ const live = new LiveMonitor({
     syncDesired();
   },
   onWentLive: (channel, info) => {
+    if (isWatched(channel)) return; // marquée « fini » pour aujourd'hui : pas d'alerte
     // Une seule alerte même si la chaîne est favorite et sans carte : le mode le plus fort l'emporte
     const noCard = !cardsOf(channel).length;
     const modes = [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts];
