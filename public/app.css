@@ -750,6 +750,12 @@ button.v2-pip.legendary.is-owned { background: var(--legendary); border: 1px sol
 }
 .v2-drop .v2-icon { width: 12px; height: 12px; stroke-width: 2.2; }
 .v2-drop.is-off { color: var(--muted); background: var(--surface-2); }
+.v2-rate {
+  flex: none; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11.5px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.v2-rate .v2-icon { width: 12px; height: 12px; stroke-width: 2; }
+.v2-rate.is-none { opacity: .55; }
 .v2 #channels li.watched > :not(.v2-actions) { opacity: .45; }
 .v2 #channels li .detail { min-width: 96px; }
 

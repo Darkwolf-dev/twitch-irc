@@ -291,6 +291,7 @@ const ICONS = {
   external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   close: "M6 6l12 12M18 6 6 18",
   clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+  gift: "M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-1.5-3-5-3-5-1s3 1 5 1zM12 7c1.5-3 5-3 5-1s-3 1-5 1z",
 };
 
 function icon(name, cls = "v2-icon") {
@@ -526,6 +527,14 @@ function renderChannel(channel) {
     class: `v2-drop${channel.live ? "" : " is-off"}`,
     title: `Drop à ${new Date(channel.lastDrop).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} : pas de nouveau drop possible avant ${wait} min`,
   }, icon("clock"), `drop dans ${wait} min`);
+  // Boosters par jour de présence (radar à drops), discret ; rien tant qu'on n'a jamais été dans le chat
+  const stats = dropScore(channel.name);
+  const rate = stats?.presenceDays > 0 && el("span", {
+    class: `v2-rate${stats.boosters ? "" : " is-none"}`,
+    title: stats.boosters
+      ? `${stats.boosters} booster${stats.boosters > 1 ? "s" : ""} en ${stats.presenceDays} j de présence (radar à drops)`
+      : `Aucun booster vu en ${stats.presenceDays} j de présence (radar à drops)`,
+  }, icon("gift"), stats.boosters ? `${String(stats.perDay).replace(".", ",")}/j` : "0");
   const sanction = channel.sanction && el("span", {
     class: `sanction-badge ${channel.sanction.type}`,
     title: channel.sanction.type === "ban"
@@ -558,7 +567,7 @@ function renderChannel(channel) {
       title: `Chat, stats et réglages de ${channel.name}`,
       onclick: () => openChannel(channel.name),
     }, channel.name),
-    favMark, badge, fresh, dropped, sanction, modeTag, ...groupTags,
+    favMark, badge, fresh, rate, dropped, sanction, modeTag, ...groupTags,
     channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"));
 
   // Ligne 2 : jeu et titre en live ; sinon dernier message reçu, ou date du dernier live
