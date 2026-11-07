@@ -288,6 +288,7 @@ const settings = {
   discordWebhook: "",
   discordUserId: "",
   mentionKeywords: [],
+  watchedUsers: [],        // logins Twitch : notif avec @ quand ils écrivent ou sont cités, même en heures calmes
   discordLiveAlerts: "on", // favori en live : "off" | "on" | "ping"
   discordNoCardAlerts: "ping", // chaîne sans aucune carte streamer en live : "off" | "on" | "ping"
   allowSecretLogin: true,  // connexion au panneau / à l'API avec le secret (toujours permise depuis le serveur lui-même)
@@ -305,6 +306,7 @@ try {
 settings.maxConcurrent = Math.min(maxChannels, Math.max(1, Number(settings.maxConcurrent) || maxChannels));
 if (!isWebhookUrl(settings.discordWebhook)) settings.discordWebhook = "";
 if (!Array.isArray(settings.mentionKeywords)) settings.mentionKeywords = [];
+if (!Array.isArray(settings.watchedUsers)) settings.watchedUsers = [];
 if (!isDiscordUserId(settings.discordUserId)) settings.discordUserId = "";
 if (!["off", "on", "ping"].includes(settings.discordLiveAlerts)) settings.discordLiveAlerts = "on";
 if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "ping";
@@ -354,6 +356,7 @@ function publicSettings() {
   return {
     maxConcurrent: settings.maxConcurrent,
     mentionKeywords: settings.mentionKeywords,
+    watchedUsers: settings.watchedUsers,
     discordUserId: settings.discordUserId,
     discordWebhookSet: Boolean(settings.discordWebhook),
     discordLiveAlerts: settings.discordLiveAlerts,
@@ -975,7 +978,7 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { maxConcurrent, discordWebhook, discordUserId, mentionKeywords, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
+  const { maxConcurrent, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
   const newQuiet = quietHours === undefined ? undefined : validSchedule(quietHours);
   if (newQuiet === null) return res.status(400).json({ error: "Heures calmes invalides (heures HH:MM différentes, fuseau valide)" });
   if (allowSecretLogin !== undefined) {
@@ -1013,6 +1016,14 @@ app.post("/settings", (req, res) => {
     keywords = [...new Set(mentionKeywords.map((k) => String(k).trim().replace(/^@/, "").toLowerCase()).filter(Boolean))];
     if (keywords.some((k) => k.length > 30)) return res.status(400).json({ error: "Mot-clé trop long (30 caractères max)" });
   }
+  let watched;
+  if (watchedUsers !== undefined) {
+    if (!Array.isArray(watchedUsers) || watchedUsers.length > 20) {
+      return res.status(400).json({ error: "20 personnes surveillées au maximum" });
+    }
+    watched = [...new Set(watchedUsers.map((k) => String(k).trim().replace(/^@/, "").toLowerCase()).filter(Boolean))];
+    if (watched.some((k) => !/^\w{1,25}$/.test(k))) return res.status(400).json({ error: "Pseudo Twitch invalide dans les personnes surveillées" });
+  }
 
   if (maxConcurrent !== undefined && maxConcurrent !== settings.maxConcurrent) {
     log.log(`[api] Plafond de chats simultanés : ${settings.maxConcurrent} → ${maxConcurrent}`);
@@ -1024,6 +1035,10 @@ app.post("/settings", (req, res) => {
     log.log(`[api] Webhook Discord ${discordWebhook ? "configuré" : "supprimé"}`);
   }
   if (keywords) settings.mentionKeywords = keywords;
+  if (watched && JSON.stringify(watched) !== JSON.stringify(settings.watchedUsers)) {
+    settings.watchedUsers = watched;
+    log.log(`[api] Personnes surveillées : ${watched.join(", ") || "aucune"}`);
+  }
   if (discordUserId !== undefined) settings.discordUserId = discordUserId;
   if (discordLiveAlerts !== undefined) settings.discordLiveAlerts = discordLiveAlerts;
   if (discordNoCardAlerts !== undefined) settings.discordNoCardAlerts = discordNoCardAlerts;

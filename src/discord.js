@@ -39,22 +39,40 @@ class MentionNotifier {
     return custom.length ? custom : [this.getUsername()].filter(Boolean);
   }
 
+  // Limite anti-spam commune à toutes les notifications de chat
+  allowSend(now) {
+    this.sent = this.sent.filter((t) => now - t < 60_000);
+    if (this.sent.length >= MAX_PER_MINUTE) {
+      if (this.dropped++ === 0) this.log.warn(`[discord] Plus de ${MAX_PER_MINUTE} notifications de chat par minute : les suivantes sont ignorées`);
+      return false;
+    }
+    this.sent.push(now);
+    this.dropped = 0;
+    return true;
+  }
+
+  // Personne surveillée : elle écrit, ou son pseudo est cité. Toujours avec @, même en heures calmes.
+  watchedMatch(message) {
+    const watched = this.getSettings().watchedUsers ?? [];
+    if (!watched.length) return null;
+    if (watched.includes(message.login)) return { who: message.login, wrote: true };
+    const cited = watched.find((w) => buildMatcher([w])(message.text) || message.replyTo === w);
+    return cited ? { who: cited, wrote: false } : null;
+  }
+
   handle(message) {
     const { discordWebhook } = this.getSettings();
     const me = this.getUsername();
     if (!discordWebhook || !me || message.login === me) return;
 
+    const watch = this.watchedMatch(message);
+    if (watch) return this.watchAlert(message, watch);
+
     const isReply = message.replyTo === me;
     if (!isReply && !buildMatcher(this.keywords())(message.text)) return;
 
     const now = Date.now();
-    this.sent = this.sent.filter((t) => now - t < 60_000);
-    if (this.sent.length >= MAX_PER_MINUTE) {
-      if (this.dropped++ === 0) this.log.warn(`[discord] Plus de ${MAX_PER_MINUTE} mentions par minute : les suivantes sont ignorées`);
-      return;
-    }
-    this.sent.push(now);
-    this.dropped = 0;
+    if (!this.allowSend(now)) return;
 
     this.log.log(`[discord] Mention de ${message.user} dans #${message.channel}`);
     this.post(discordWebhook, {
@@ -67,6 +85,22 @@ class MentionNotifier {
         timestamp: new Date(now).toISOString(),
       }],
     }, true, this.isQuiet());
+  }
+
+  watchAlert(message, { who, wrote }) {
+    const now = Date.now();
+    if (!this.allowSend(now)) return;
+    this.log.log(`[discord] ${who} ${wrote ? "a écrit" : "cité"} dans #${message.channel}`);
+    this.post(this.getSettings().discordWebhook, {
+      embeds: [{
+        author: { name: wrote ? `👀 ${message.user} a écrit dans #${message.channel}` : `👀 ${message.user} parle de ${who} dans #${message.channel}` },
+        title: `Ouvrir #${message.channel}`,
+        url: `https://www.twitch.tv/${encodeURIComponent(message.channel)}`,
+        description: message.text.slice(0, 1000),
+        color: 0x22c55e,
+        timestamp: new Date(now).toISOString(),
+      }],
+    }, true, false);
   }
 
   // Un favori vient de passer en live. mode : "on" (message) ou "ping" (message + mention)

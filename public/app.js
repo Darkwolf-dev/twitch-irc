@@ -1077,6 +1077,7 @@ function renderSettings() {
   if (document.activeElement !== $("discord-user-id")) $("discord-user-id").value = s.discordUserId;
   const keywordsInput = $("mention-keywords");
   if (document.activeElement !== keywordsInput) keywordsInput.value = s.mentionKeywords.join(", ");
+  if (document.activeElement !== $("watched-users")) $("watched-users").value = s.watchedUsers.join(", ");
   keywordsInput.placeholder = `${lastStatus.irc.username ?? "ton pseudo"} (par défaut)`;
   if (document.activeElement !== $("live-alerts")) $("live-alerts").value = s.discordLiveAlerts;
   if (document.activeElement !== $("nocard-alerts")) $("nocard-alerts").value = s.discordNoCardAlerts;
@@ -1144,6 +1145,7 @@ $("discord-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const body = {
     mentionKeywords: $("mention-keywords").value.split(/[,;\n]+/).map((k) => k.trim()).filter(Boolean),
+    watchedUsers: $("watched-users").value.split(/[,;\s]+/).map((k) => k.trim()).filter(Boolean),
     discordUserId: $("discord-user-id").value.trim(),
     discordLiveAlerts: $("live-alerts").value,
     discordNoCardAlerts: $("nocard-alerts").value,
