@@ -14,8 +14,8 @@ const LABELS = {
   schedule: "hors plage horaire",
   watched: "fini, quitté",
 };
-// Les marques « fini » tombent à minuit UTC : 1 h à Paris l'hiver, 2 h l'été
-const RESET_AT = `${new Date(new Date().setUTCHours(24, 0, 0, 0)).getHours()} h`;
+// Les marques « fini » tombent à minuit, heure de Paris
+const RESET_AT = "minuit";
 // Cartes streamer qu'on peut cocher sur chaque chaîne
 const CARDS = [
   { rarity: "epic", label: "Épique" },
