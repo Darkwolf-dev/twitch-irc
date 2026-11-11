@@ -7,7 +7,7 @@ set -euo pipefail
 HOST=dw-twitch
 DIR=/opt/twitch-irc
 COMPOSE="docker compose -f docker-compose.tunnel.yml"
-FILES=(src public package.json package-lock.json Dockerfile .dockerignore)
+FILES=(src public package.json package-lock.json Dockerfile .dockerignore docker-compose.tunnel.yml)
 
 cd "$(dirname "$0")/.."
 if ! git diff --quiet HEAD -- "${FILES[@]}"; then
@@ -15,12 +15,12 @@ if ! git diff --quiet HEAD -- "${FILES[@]}"; then
 fi
 
 echo "→ Sauvegarde de l'état actuel du serveur"
-ssh "$HOST" "cd $DIR && mkdir -p /root/deploy-backup && tar czf /root/deploy-backup/before-\$(date +%Y%m%d-%H%M%S).tgz src public data/channels.json"
+ssh "$HOST" "cd $DIR && mkdir -p /root/deploy-backup && tar czf /root/deploy-backup/before-\$(date +%Y%m%d-%H%M%S).tgz src public data/channels.json docker-compose.tunnel.yml"
 
 echo "→ Envoi de $(git rev-parse --short HEAD)"
 git archive HEAD "${FILES[@]}" | ssh "$HOST" "cd $DIR && tar xf - --warning=no-timestamp"
 
 echo "→ Reconstruction et redémarrage"
-ssh "$HOST" "cd $DIR && $COMPOSE up -d --build app 2>&1 | tail -1 && sleep 8 && $COMPOSE logs --since 1m app | tail -6 && $COMPOSE exec -T app wget -qO- 127.0.0.1:3000/healthz"
+ssh "$HOST" "cd $DIR && $COMPOSE up -d --build 2>&1 | tail -2 && sleep 8 && $COMPOSE logs --since 1m app | tail -6 && $COMPOSE exec -T app wget -qO- 127.0.0.1:3000/healthz"
 echo
 echo "✓ Déployé"
