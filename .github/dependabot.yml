@@ -1,12 +1,13 @@
 # Dependabot : propose une PR quand une dépendance a une nouvelle version.
-# Les mises à jour sont regroupées en une seule PR par semaine et par écosystème.
+# Vérification chaque matin à 8 h ; les mises à jour npm sont regroupées en une seule PR.
+# Les failles de sécurité, elles, déclenchent une PR immédiate (réglage « security updates »).
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
+      time: "08:00"
       timezone: Europe/Paris
     groups:
       npm:
@@ -17,8 +18,8 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
+      time: "08:00"
       timezone: Europe/Paris
     open-pull-requests-limit: 2
 
@@ -26,7 +27,7 @@ updates:
   - package-ecosystem: docker-compose
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
+      time: "08:00"
       timezone: Europe/Paris
     open-pull-requests-limit: 2
