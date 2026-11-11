@@ -1,0 +1,32 @@
+# Dependabot : propose une PR quand une dépendance a une nouvelle version.
+# Les mises à jour sont regroupées en une seule PR par semaine et par écosystème.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Paris
+    groups:
+      npm:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # Image de base Node (Dockerfile)
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Paris
+    open-pull-requests-limit: 2
+
+  # cloudflared (docker-compose.tunnel.yml)
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Paris
+    open-pull-requests-limit: 2
