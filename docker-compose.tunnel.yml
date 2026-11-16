@@ -40,7 +40,7 @@ services:
   cloudflared:
     # Version épinglée : « latest » n'est jamais retiré tant que le conteneur tourne.
     # 2026.10.2+ requis (certificats intermédiaires eMudhra compromis, oct. 2026).
-    image: cloudflare/cloudflared:2026.10.7
+    image: cloudflare/cloudflared:2026.11.0
     logging: *logging
     restart: unless-stopped
     depends_on:
