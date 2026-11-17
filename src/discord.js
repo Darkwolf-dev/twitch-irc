@@ -76,6 +76,7 @@ class MentionNotifier {
 
     this.log.log(`[discord] Mention de ${message.user} dans #${message.channel}`);
     this.post(discordWebhook, {
+      summary: `💬 ${message.user} dans #${message.channel} : ${message.text}`,
       embeds: [{
         author: { name: `${message.user} ${isReply ? "t'a répondu" : "t'a mentionné"} dans #${message.channel}` },
         title: `Ouvrir #${message.channel}`,
@@ -92,6 +93,7 @@ class MentionNotifier {
     if (!this.allowSend(now)) return;
     this.log.log(`[discord] ${who} ${wrote ? "a écrit" : "cité"} dans #${message.channel}`);
     this.post(this.getSettings().discordWebhook, {
+      summary: `👀 ${message.user} dans #${message.channel} : ${message.text}`,
       embeds: [{
         author: { name: wrote ? `👀 ${message.user} a écrit dans #${message.channel}` : `👀 ${message.user} parle de ${who} dans #${message.channel}` },
         title: `Ouvrir #${message.channel}`,
@@ -110,6 +112,7 @@ class MentionNotifier {
     this.log.log(`[discord] Alerte live : ${channel}`);
     const url = `https://www.twitch.tv/${encodeURIComponent(channel)}`;
     this.post(discordWebhook, {
+      summary: `🔴 ${info.displayName || channel} est en live${info.game ? ` sur ${info.game}` : ""}${info.title ? ` : ${info.title}` : ""}`,
       embeds: [{
         author: { name: `${info.displayName || channel} est en live` },
         title: info.title?.slice(0, 250) || `Ouvrir ${channel}`,
@@ -128,6 +131,7 @@ class MentionNotifier {
     if (!discordWebhook) return;
     const what = type === "ban" ? "⛔ Banni" : `⏱ Timeout ${formatDuration(duration)}`;
     this.post(discordWebhook, {
+      summary: `${what} sur #${channel}`,
       embeds: [{
         title: `${what} sur #${channel}`,
         url: `https://www.twitch.tv/${encodeURIComponent(channel)}`,
@@ -145,6 +149,7 @@ class MentionNotifier {
     const { discordWebhook } = this.getSettings();
     if (!discordWebhook) return;
     this.post(discordWebhook, {
+      summary: `🔐 ${title}`,
       embeds: [{
         title: `🔐 ${title}`,
         description: details,
@@ -159,6 +164,7 @@ class MentionNotifier {
     const { discordWebhook } = this.getSettings();
     if (!discordWebhook) return;
     this.post(discordWebhook, {
+      summary: "🔌 Compte Twitch déconnecté : ouvre le panneau et clique sur Reconnecter",
       embeds: [{
         title: "🔌 Compte Twitch déconnecté",
         description: `${reason.replace(/ : relance `npm run auth`$/, "")}\n\nL'IRC ne peut plus se connecter. Ouvre le panneau et clique sur **Reconnecter**.`,
@@ -181,13 +187,19 @@ class MentionNotifier {
     if (!ok) throw new Error("Discord a refusé le message : vérifie l'adresse du webhook");
   }
 
-  async post(url, payload, mention = true, silent = false) {
+  async post(url, { summary, ...payload }, mention = true, silent = false) {
     // Mention de l'utilisateur configuré (pastille rouge sur Discord). Seul cet utilisateur peut
     // être mentionné : aucun @everyone ou @rôle ne peut venir du texte du chat.
     const userId = this.getSettings().discordUserId;
-    const ping = mention && isDiscordUserId(userId)
-      ? { content: `<@${userId}>`, allowed_mentions: { parse: [], users: [userId] } }
-      : { allowed_mentions: { parse: [] } };
+    const withPing = mention && isDiscordUserId(userId);
+    // Résumé en texte simple après la mention : c'est la seule partie qu'affiche une notif de
+    // téléphone (les cartes « embed » n'y apparaissent pas)
+    const text = summary ? plain(summary) : "";
+    const content = [withPing && `<@${userId}>`, text].filter(Boolean).join(" ");
+    const ping = {
+      ...(content && { content }),
+      allowed_mentions: withPing ? { parse: [], users: [userId] } : { parse: [] },
+    };
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -203,6 +215,13 @@ class MentionNotifier {
       return false;
     }
   }
+}
+
+// Une seule ligne de 180 caractères au plus. Pas d'échappement : la notif du téléphone montrerait
+// les « \ », et allowed_mentions empêche déjà le texte du chat de mentionner qui que ce soit.
+function plain(text) {
+  const line = text.replace(/\s+/g, " ").trim();
+  return line.length > 180 ? `${line.slice(0, 179)}…` : line;
 }
 
 // 600 → « 10 min », 86400 → « 1 j »
