@@ -27,9 +27,6 @@ function buildMatcher(keywords) {
 class MentionNotifier {
   constructor({ getSettings, getUsername, isQuiet = () => false, log }) {
     this.getSettings = getSettings;
-    // Mode Miami : aux débuts de live, la mention @ est réservée aux chaînes sans carte ou du
-    // groupe « miami » (les autres alertes de live partent sans @). Le reste n'est pas concerné.
-    this.isMiami = () => this.getSettings().miamiMode === true;
     this.getUsername = getUsername;
     this.isQuiet = isQuiet; // heures calmes : messages envoyés en @silent (mention gardée, sans son ni push)
     this.log = log;
@@ -125,7 +122,7 @@ class MentionNotifier {
         color: 0xe91916,
         timestamp: info.startedAt,
       }],
-    }, this.isMiami() ? noCard || miami : mode === "ping", this.isQuiet());
+    }, mode === "ping", this.isQuiet());
   }
 
   // Notre compte a été timeout ou banni d'un chat

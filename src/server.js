@@ -209,10 +209,11 @@ const live = new LiveMonitor({
     if (isWatched(channel)) return; // marquée « fini » pour aujourd'hui : pas d'alerte
     // Une seule alerte même si la chaîne est favorite et sans carte : le mode le plus fort l'emporte
     const noCard = !cardsOf(channel).length;
-    // Mode Miami : les chaînes sans carte et celles du groupe « miami » sont toujours notifiées avec @
+    // Mode Miami : seules les chaînes sans carte et celles du groupe « miami » sont notifiées, avec @
     const miami = settings.miamiMode && isMiamiChannel(channel);
-    const modes = [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts,
-      settings.miamiMode && (noCard || miami) && "ping"];
+    const modes = settings.miamiMode
+      ? [(noCard || miami) && "ping"]
+      : [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts];
     const mode = ["ping", "on"].find((m) => modes.includes(m));
     if (mode) notifier.liveAlert(channel, info, mode, { noCard, miami });
   },
