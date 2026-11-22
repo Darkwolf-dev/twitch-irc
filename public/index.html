@@ -17,6 +17,25 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<!-- Décor du mode Miami : soleil rayé et palmiers fixés en bas à droite, affichés seulement en mode Miami -->
+<div class="miami-decor" aria-hidden="true">
+  <div class="miami-sun"></div>
+  <svg class="miami-palms" viewBox="0 0 260 300">
+    <path class="trunk" stroke-width="9" d="M150 305 C 156 240, 142 170, 168 105"/>
+    <path d="M168 105 C 130 80, 90 85, 58 118 C 98 100, 132 100, 168 110 Z"/>
+    <path d="M168 105 C 140 60, 100 45, 70 58 C 110 62, 140 80, 166 110 Z"/>
+    <path d="M168 105 C 175 60, 200 38, 232 40 C 205 55, 186 78, 172 110 Z"/>
+    <path d="M168 105 C 205 85, 240 95, 258 128 C 230 108, 200 104, 170 112 Z"/>
+    <path d="M168 105 C 190 120, 205 150, 202 182 C 192 152, 180 132, 165 112 Z"/>
+    <path d="M168 105 C 145 120, 128 145, 126 172 C 140 148, 152 130, 170 112 Z"/>
+    <path class="trunk" stroke-width="6" d="M62 305 C 66 265, 55 225, 72 188"/>
+    <path d="M72 188 C 48 172, 22 176, 4 196 C 28 186, 50 186, 72 193 Z"/>
+    <path d="M72 188 C 60 160, 36 150, 16 156 C 42 162, 58 174, 70 193 Z"/>
+    <path d="M72 188 C 82 160, 104 148, 126 152 C 104 160, 88 174, 75 193 Z"/>
+    <path d="M72 188 C 98 178, 120 186, 132 206 C 112 194, 94 192, 74 194 Z"/>
+    <path d="M72 188 C 84 202, 90 220, 86 240 C 80 220, 74 206, 68 194 Z"/>
+  </svg>
+</div>
 <div id="offline-banner" class="offline-banner" role="status" hidden>
   <span class="spinner" aria-hidden="true"></span>
   Connexion au serveur perdue (redémarrage ou mise à jour ?) · reconnexion automatique…
