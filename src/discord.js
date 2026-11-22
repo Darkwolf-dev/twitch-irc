@@ -27,6 +27,9 @@ function buildMatcher(keywords) {
 class MentionNotifier {
   constructor({ getSettings, getUsername, isQuiet = () => false, log }) {
     this.getSettings = getSettings;
+    // Mode Miami : aux débuts de live, la mention @ est réservée aux chaînes sans carte ou du
+    // groupe « miami » (les autres alertes de live partent sans @). Le reste n'est pas concerné.
+    this.isMiami = () => this.getSettings().miamiMode === true;
     this.getUsername = getUsername;
     this.isQuiet = isQuiet; // heures calmes : messages envoyés en @silent (mention gardée, sans son ni push)
     this.log = log;
@@ -106,7 +109,7 @@ class MentionNotifier {
   }
 
   // Un favori vient de passer en live. mode : "on" (message) ou "ping" (message + mention)
-  liveAlert(channel, info, mode, { noCard = false } = {}) {
+  liveAlert(channel, info, mode, { noCard = false, miami = false } = {}) {
     const { discordWebhook } = this.getSettings();
     if (!discordWebhook || mode === "off") return;
     this.log.log(`[discord] Alerte live : ${channel}`);
@@ -117,12 +120,12 @@ class MentionNotifier {
         author: { name: `${info.displayName || channel} est en live` },
         title: info.title?.slice(0, 250) || `Ouvrir ${channel}`,
         url,
-        description: [info.game && `🎮 ${info.game}`, noCard && "🃏 Aucune carte de ce streamer"].filter(Boolean).join("\n") || undefined,
+        description: [info.game && `🎮 ${info.game}`, noCard && "🃏 Aucune carte de ce streamer", miami && "🌴 Groupe miami"].filter(Boolean).join("\n") || undefined,
         image: info.thumbnail ? { url: `${info.thumbnail}?t=${Date.now()}` } : undefined,
         color: 0xe91916,
         timestamp: info.startedAt,
       }],
-    }, mode === "ping", this.isQuiet());
+    }, this.isMiami() ? noCard || miami : mode === "ping", this.isQuiet());
   }
 
   // Notre compte a été timeout ou banni d'un chat

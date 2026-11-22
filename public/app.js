@@ -1093,6 +1093,7 @@ function renderSettings() {
   if (document.activeElement !== $("nocard-alerts")) $("nocard-alerts").value = s.discordNoCardAlerts;
   if (!$("discord-form").contains(document.activeElement)) {
     $("quiet-enabled").checked = s.quietHours.enabled;
+    $("miami-mode").checked = s.miamiMode;
     $("quiet-start").value = s.quietHours.start;
     $("quiet-end").value = s.quietHours.end;
   }
@@ -1172,6 +1173,7 @@ $("discord-form").addEventListener("submit", (e) => {
     discordUserId: $("discord-user-id").value.trim(),
     discordLiveAlerts: $("live-alerts").value,
     discordNoCardAlerts: $("nocard-alerts").value,
+    miamiMode: $("miami-mode").checked,
     quietHours: {
       enabled: $("quiet-enabled").checked,
       start: $("quiet-start").value,

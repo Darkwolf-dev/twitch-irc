@@ -209,9 +209,12 @@ const live = new LiveMonitor({
     if (isWatched(channel)) return; // marquée « fini » pour aujourd'hui : pas d'alerte
     // Une seule alerte même si la chaîne est favorite et sans carte : le mode le plus fort l'emporte
     const noCard = !cardsOf(channel).length;
-    const modes = [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts];
+    // Mode Miami : les chaînes sans carte et celles du groupe « miami » sont toujours notifiées avec @
+    const miami = settings.miamiMode && isMiamiChannel(channel);
+    const modes = [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts,
+      settings.miamiMode && (noCard || miami) && "ping"];
     const mode = ["ping", "on"].find((m) => modes.includes(m));
-    if (mode) notifier.liveAlert(channel, info, mode, { noCard });
+    if (mode) notifier.liveAlert(channel, info, mode, { noCard, miami });
   },
   onAuthFailure: () => tokens.invalidate(),
   log,
@@ -300,6 +303,8 @@ const settings = {
   dormantSnoozeUntil: null, // suggestion masquée jusqu'à cette date
   // Heures calmes : notifications Discord en @silent (mention gardée, sans son ni push), sauf sécurité
   quietHours: { enabled: false, start: "01:00", end: "09:00", timeZone: "Europe/Paris" },
+  // Mode Miami : @ Discord seulement pour les lives des chaînes sans carte ou du groupe « miami »
+  miamiMode: false,
   schedule: { ...DEFAULT_SCHEDULE },
 };
 try {
@@ -314,6 +319,7 @@ if (!isDiscordUserId(settings.discordUserId)) settings.discordUserId = "";
 if (!["off", "on", "ping"].includes(settings.discordLiveAlerts)) settings.discordLiveAlerts = "on";
 if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "ping";
 if (typeof settings.allowSecretLogin !== "boolean") settings.allowSecretLogin = true;
+settings.miamiMode = settings.miamiMode === true;
 settings.ircPaused = settings.ircPaused === true;
 settings.dormantDays = Math.min(365, Math.max(7, Number(settings.dormantDays) || 30));
 if (!Array.isArray(settings.dormantKeep)) settings.dormantKeep = [];
@@ -342,6 +348,8 @@ function inTimeWindow({ start, end, timeZone }, at = new Date()) {
   return start < end ? now >= start && now < end : now >= start || now < end;
 }
 
+const isMiamiChannel = (name) => groupsOf(name).some((g) => g.toLowerCase() === "miami");
+
 function quietNow() {
   return settings.quietHours.enabled && inTimeWindow(settings.quietHours);
 }
@@ -368,6 +376,7 @@ function publicSettings() {
     allowSecretLogin: settings.allowSecretLogin,
     quietHours: settings.quietHours,
     quietNow: quietNow(),
+    miamiMode: settings.miamiMode,
     schedule: settings.schedule,
     scheduleOpen: scheduleOpen(),
   };
@@ -985,7 +994,7 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { maxConcurrent, priorityGroup, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
+  const { maxConcurrent, priorityGroup, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours, miamiMode } = req.body ?? {};
   const newPriority = priorityGroup === undefined ? undefined : priorityGroup === "" ? "" : normalizeGroup(priorityGroup);
   if (newPriority === null) return res.status(400).json({ error: "Nom de groupe prioritaire invalide" });
   const newQuiet = quietHours === undefined ? undefined : validSchedule(quietHours);
@@ -1002,6 +1011,9 @@ app.post("/settings", (req, res) => {
   }
   if (discordNoCardAlerts !== undefined && !["off", "on", "ping"].includes(discordNoCardAlerts)) {
     return res.status(400).json({ error: `"discordNoCardAlerts" doit valoir off, on ou ping` });
+  }
+  if (miamiMode !== undefined && typeof miamiMode !== "boolean") {
+    return res.status(400).json({ error: `"miamiMode" doit valoir true ou false` });
   }
   const newSchedule = schedule === undefined ? undefined : validSchedule(schedule);
   if (newSchedule === null) {
@@ -1056,6 +1068,10 @@ app.post("/settings", (req, res) => {
   if (discordUserId !== undefined) settings.discordUserId = discordUserId;
   if (discordLiveAlerts !== undefined) settings.discordLiveAlerts = discordLiveAlerts;
   if (discordNoCardAlerts !== undefined) settings.discordNoCardAlerts = discordNoCardAlerts;
+  if (miamiMode !== undefined && miamiMode !== settings.miamiMode) {
+    settings.miamiMode = miamiMode;
+    log.log(`[api] Mode Miami ${miamiMode ? "activé" : "désactivé"}`);
+  }
   if (newQuiet && JSON.stringify(newQuiet) !== JSON.stringify(settings.quietHours)) {
     settings.quietHours = newQuiet;
     log.log(`[api] Heures calmes ${newQuiet.enabled ? `${newQuiet.start}–${newQuiet.end}` : "désactivées"}`);
