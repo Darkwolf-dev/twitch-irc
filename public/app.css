@@ -865,3 +865,10 @@ body.miami :is(.account-menu, [role="menu"], dialog, .toast, .to-top) { --surfac
 @media (prefers-color-scheme: dark) {
   body.miami :is(.account-menu, [role="menu"], dialog, .toast, .to-top) { --surface: #18181b; --surface-2: #1f1f23; }
 }
+/* Bouton 🌴 de l'en-tête : grisé quand le mode est coupé, lueur néon quand il est actif */
+.miami-toggle { filter: grayscale(1); opacity: .55; transition: filter .15s, opacity .15s, box-shadow .15s; }
+.miami-toggle:hover { opacity: .85; }
+.miami-toggle[aria-pressed="true"] {
+  filter: none; opacity: 1;
+  border-color: #ff7ab6; box-shadow: 0 0 0 1px rgba(38, 214, 230, .45), 0 0 12px rgba(255, 79, 160, .45);
+}

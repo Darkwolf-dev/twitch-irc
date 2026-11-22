@@ -109,6 +109,7 @@ function logout(message) {
   $("account-menu").hidden = true;
   $("open-settings").hidden = true;
   $("open-drops").hidden = true;
+  $("miami-toggle").hidden = true;
   $("profile-box").hidden = true;
   if ($("settings-dialog").open) $("settings-dialog").close();
   showLogin(message);
@@ -1063,7 +1064,9 @@ function renderSettings() {
   input.max = String(lastStatus.limits.active);
   // Ne pas écraser ce que l'utilisateur est en train de taper
   if (document.activeElement !== input) input.value = String(lastStatus.settings.maxConcurrent);
-  document.body.classList.toggle("miami", lastStatus.settings.miamiMode === true);
+  const miami = lastStatus.settings.miamiMode === true;
+  document.body.classList.toggle("miami", miami);
+  $("miami-toggle").setAttribute("aria-pressed", String(miami));
   const prio = $("priority-group");
   if (document.activeElement !== prio) {
     const current = lastStatus.settings.priorityGroup;
@@ -1094,7 +1097,6 @@ function renderSettings() {
   if (document.activeElement !== $("nocard-alerts")) $("nocard-alerts").value = s.discordNoCardAlerts;
   if (!$("discord-form").contains(document.activeElement)) {
     $("quiet-enabled").checked = s.quietHours.enabled;
-    $("miami-mode").checked = s.miamiMode;
     $("quiet-start").value = s.quietHours.start;
     $("quiet-end").value = s.quietHours.end;
   }
@@ -1174,7 +1176,6 @@ $("discord-form").addEventListener("submit", (e) => {
     discordUserId: $("discord-user-id").value.trim(),
     discordLiveAlerts: $("live-alerts").value,
     discordNoCardAlerts: $("nocard-alerts").value,
-    miamiMode: $("miami-mode").checked,
     quietHours: {
       enabled: $("quiet-enabled").checked,
       start: $("quiet-start").value,
@@ -1440,6 +1441,23 @@ $("drops-manual").addEventListener("submit", async (e) => {
 });
 
 $("open-drops").addEventListener("click", openDrops);
+
+// Mode Miami en un clic depuis l'en-tête
+$("miami-toggle").addEventListener("click", async () => {
+  const btn = $("miami-toggle");
+  const on = !(lastStatus?.settings.miamiMode === true);
+  btn.disabled = true;
+  try {
+    await api("/settings", { miamiMode: on });
+    await refresh();
+    showToast(on ? "🌴 Mode Miami activé : lives notifiés seulement pour les chaînes sans carte ou du groupe miami"
+      : "Mode Miami désactivé : alertes de live habituelles");
+  } catch (err) {
+    if (err.message !== "auth") $("error").textContent = `⚠ ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
 $("drops-close").addEventListener("click", () => $("drops-dialog").close());
 $("drops-dialog").addEventListener("click", (e) => { if (e.target === $("drops-dialog")) $("drops-dialog").close(); });
 
@@ -1775,6 +1793,7 @@ async function loadMe() {
     $("account").hidden = false;
     $("open-settings").hidden = false;
     $("open-drops").hidden = false;
+    $("miami-toggle").hidden = false;
     $("profile-box").hidden = false;
   } catch (err) {
     $("account").hidden = true;
