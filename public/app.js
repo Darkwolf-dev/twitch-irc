@@ -363,7 +363,14 @@ function visibleChannels() {
       if (view.startsWith("group:")) return c.groups.includes(view.slice(6));
       return true;
     })
-    .sort(view === "todo" ? byTodo : SORTS[$("sort").value] ?? SORTS.status);
+    .sort(miamiFirst(view === "todo" ? byTodo : SORTS[$("sort").value] ?? SORTS.status));
+}
+
+// Mode Miami : les chaînes miami en live passent en tête, quel que soit le tri choisi
+const isMiamiLive = (c) => Boolean(c.live && c.groups.some((g) => g.toLowerCase() === "miami"));
+function miamiFirst(sort) {
+  if (lastStatus.settings.miamiMode !== true) return sort;
+  return (a, b) => (isMiamiLive(b) - isMiamiLive(a)) || sort(a, b);
 }
 
 // Rang « statut » : en live et activées, en live désactivées, en live marquées « fini »,
