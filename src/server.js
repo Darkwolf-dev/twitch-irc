@@ -286,6 +286,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const DEFAULT_SCHEDULE = { enabled: false, start: "18:00", end: "02:00", timeZone: "Europe/Paris" };
 const settings = {
   maxConcurrent: maxChannels,
+  priorityGroup: "",       // ses chaînes en live passent avant toutes les autres sous le plafond
   discordWebhook: "",
   discordUserId: "",
   mentionKeywords: [],
@@ -305,6 +306,7 @@ try {
   Object.assign(settings, JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8")));
 } catch {}
 settings.maxConcurrent = Math.min(maxChannels, Math.max(1, Number(settings.maxConcurrent) || maxChannels));
+settings.priorityGroup = normalizeGroup(settings.priorityGroup) ?? "";
 if (!isWebhookUrl(settings.discordWebhook)) settings.discordWebhook = "";
 if (!Array.isArray(settings.mentionKeywords)) settings.mentionKeywords = [];
 if (!Array.isArray(settings.watchedUsers)) settings.watchedUsers = [];
@@ -356,6 +358,7 @@ function scheduleOpen(at = new Date()) {
 function publicSettings() {
   return {
     maxConcurrent: settings.maxConcurrent,
+    priorityGroup: settings.priorityGroup,
     mentionKeywords: settings.mentionKeywords,
     watchedUsers: settings.watchedUsers,
     discordUserId: settings.discordUserId,
@@ -385,8 +388,9 @@ function saveSettings() {
 }
 
 // Calcule les chaînes à rejoindre, dans la limite du plafond de chats simultanés :
-// d'abord les chaînes « toujours » (favoris en tête), puis celles « si live »
-// actuellement en live (favoris, puis celles qui droppent le plus, puis plus gros lives).
+// d'abord celles du groupe prioritaire, puis les chaînes « toujours » (favoris en tête),
+// puis celles « si live » actuellement en live (favoris, puis celles qui droppent le plus,
+// puis plus gros lives).
 function syncDesired() {
   // Une chaîne marquée « vu » n'est plus rejointe jusqu'à la remise à zéro de minuit (Paris)
   const candidates = [...enabled].filter((n) => !isWatched(n));
@@ -403,7 +407,9 @@ function syncDesired() {
       ((dropScores.get(b) ?? 0) - (dropScores.get(a) ?? 0)) ||
       ((live.info(b)?.viewers ?? 0) - (live.info(a)?.viewers ?? 0)) ||
       a.localeCompare(b));
-  irc.setDesired(new Set([...always, ...whenLive].slice(0, settings.maxConcurrent)));
+  const prio = (n) => Boolean(settings.priorityGroup && groups.get(n)?.has(settings.priorityGroup));
+  const ordered = [...always, ...whenLive].sort((a, b) => prio(b) - prio(a)); // tri stable
+  irc.setDesired(new Set(ordered.slice(0, settings.maxConcurrent)));
 }
 
 // --- Sauvegardes de la liste des chaînes ---
@@ -979,7 +985,9 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { maxConcurrent, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
+  const { maxConcurrent, priorityGroup, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours } = req.body ?? {};
+  const newPriority = priorityGroup === undefined ? undefined : priorityGroup === "" ? "" : normalizeGroup(priorityGroup);
+  if (newPriority === null) return res.status(400).json({ error: "Nom de groupe prioritaire invalide" });
   const newQuiet = quietHours === undefined ? undefined : validSchedule(quietHours);
   if (newQuiet === null) return res.status(400).json({ error: "Heures calmes invalides (heures HH:MM différentes, fuseau valide)" });
   if (allowSecretLogin !== undefined) {
@@ -1029,6 +1037,11 @@ app.post("/settings", (req, res) => {
   if (maxConcurrent !== undefined && maxConcurrent !== settings.maxConcurrent) {
     log.log(`[api] Plafond de chats simultanés : ${settings.maxConcurrent} → ${maxConcurrent}`);
     settings.maxConcurrent = maxConcurrent;
+    syncDesired();
+  }
+  if (newPriority !== undefined && newPriority !== settings.priorityGroup) {
+    log.log(`[api] Groupe prioritaire : ${newPriority || "aucun"}`);
+    settings.priorityGroup = newPriority;
     syncDesired();
   }
   if (discordWebhook !== undefined && discordWebhook !== settings.discordWebhook) {

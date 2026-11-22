@@ -1062,6 +1062,15 @@ function renderSettings() {
   input.max = String(lastStatus.limits.active);
   // Ne pas écraser ce que l'utilisateur est en train de taper
   if (document.activeElement !== input) input.value = String(lastStatus.settings.maxConcurrent);
+  const prio = $("priority-group");
+  if (document.activeElement !== prio) {
+    const current = lastStatus.settings.priorityGroup;
+    const names = lastStatus.groups.map((g) => g.name);
+    if (current && !names.includes(current)) names.push(current);
+    prio.replaceChildren(el("option", { value: "" }, "Aucun"),
+      ...names.map((n) => el("option", { value: n }, n)));
+    prio.value = current;
+  }
 
   const waiting = lastStatus.channels.filter((c) => c.state === "full").length;
   $("settings-status").textContent = waiting
@@ -1108,6 +1117,19 @@ function renderSettings() {
     ? `Sauvegardes de la liste : ${b.count} gardée(s) sur le serveur (max ${b.keep}), dernière le ${new Date(b.latest).toLocaleString()}.`
     : "Sauvegardes de la liste : aucune pour le moment.";
 }
+
+$("priority-group").addEventListener("change", async (e) => {
+  const value = e.target.value;
+  $("error").textContent = "";
+  try {
+    await api("/settings", { priorityGroup: value });
+    e.target.blur();
+    await refresh();
+    $("settings-status").textContent = value ? `Groupe prioritaire : ${value}.` : "Plus de groupe prioritaire.";
+  } catch (err) {
+    showError(err);
+  }
+});
 
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();

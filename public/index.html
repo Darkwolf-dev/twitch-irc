@@ -194,7 +194,10 @@
               <input id="max-concurrent" type="number" min="1" step="1" inputmode="numeric" required aria-label="Nombre maximum de chats rejoints">
               <button>Enregistrer</button>
             </div>
-            <p class="hint">Moins tu es présent dans de chats à la fois, moins ton compte ressemble à un bot. Au-delà du plafond : priorité aux chaînes « toujours », puis aux favoris, puis aux plus gros lives.</p>
+            <p class="hint">Moins tu es présent dans de chats à la fois, moins ton compte ressemble à un bot. Au-delà du plafond : priorité au groupe prioritaire, puis aux chaînes « toujours », puis aux favoris, puis aux plus gros lives.</p>
+            <label for="priority-group">Groupe prioritaire</label>
+            <select id="priority-group"></select>
+            <p class="hint">Ses chaînes en live prennent les places en premier : avec un plafond de 3 et 2 d'entre elles en live, il ne reste qu'1 place pour les autres.</p>
             <p id="settings-status" class="hint" role="status"></p>
           </form>
 
