@@ -836,3 +836,22 @@ body.compact .switch input:checked + span::after { transform: translateX(14px); 
   body.compact .v2 #channels li .v2-actions, body.compact li .live-line, body.compact li .last,
   body.compact li .last-live, body.compact .v2 #channels li .detail { display: none; }
 }
+
+/* Mode Miami : lueurs coucher de soleil néon, discrètes, dans le fond de page (fixes au défilement,
+   donc les barres collantes qui reprennent var(--bg) restent raccord) */
+body.miami {
+  --bg:
+    radial-gradient(70% 45% at 100% 0%, rgba(255, 94, 148, 0.10), transparent 70%) fixed,
+    radial-gradient(55% 40% at 0% 100%, rgba(38, 214, 230, 0.08), transparent 70%) fixed,
+    linear-gradient(180deg, rgba(255, 166, 77, 0.05), transparent 30%) fixed,
+    #f6f6f8;
+}
+@media (prefers-color-scheme: dark) {
+  body.miami {
+    --bg:
+      radial-gradient(70% 45% at 100% 0%, rgba(255, 60, 140, 0.13), transparent 70%) fixed,
+      radial-gradient(55% 40% at 0% 100%, rgba(20, 200, 220, 0.09), transparent 70%) fixed,
+      linear-gradient(180deg, rgba(140, 60, 200, 0.08), transparent 35%) fixed,
+      #0e0e10;
+  }
+}

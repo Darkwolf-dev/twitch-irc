@@ -1063,6 +1063,7 @@ function renderSettings() {
   input.max = String(lastStatus.limits.active);
   // Ne pas écraser ce que l'utilisateur est en train de taper
   if (document.activeElement !== input) input.value = String(lastStatus.settings.maxConcurrent);
+  document.body.classList.toggle("miami", lastStatus.settings.miamiMode === true);
   const prio = $("priority-group");
   if (document.activeElement !== prio) {
     const current = lastStatus.settings.priorityGroup;
