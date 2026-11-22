@@ -1066,6 +1066,7 @@ function renderSettings() {
   if (document.activeElement !== input) input.value = String(lastStatus.settings.maxConcurrent);
   const miami = lastStatus.settings.miamiMode === true;
   document.body.classList.toggle("miami", miami);
+  setMiamiThemeColor(miami);
   $("miami-toggle").setAttribute("aria-pressed", String(miami));
   const prio = $("priority-group");
   if (document.activeElement !== prio) {
@@ -1442,6 +1443,23 @@ $("drops-manual").addEventListener("submit", async (e) => {
 
 $("open-drops").addEventListener("click", openDrops);
 
+// « 🌴 Mode Miami activé : 46 chaînes surveillées (37 sans carte, 9 miami) »
+function miamiSummary() {
+  const isMiami = (c) => c.groups.some((g) => g.toLowerCase() === "miami");
+  const noCard = lastStatus.channels.filter((c) => !c.cards.length).length;
+  const miami = lastStatus.channels.filter(isMiami).length;
+  const total = lastStatus.channels.filter((c) => !c.cards.length || isMiami(c)).length;
+  return `🌴 Mode Miami activé : ${total} chaîne${total > 1 ? "s" : ""} surveillée${total > 1 ? "s" : ""} (${noCard} sans carte, ${miami} miami)`;
+}
+
+// Barre du navigateur (téléphone) : violet rosé en mode Miami, couleurs d'origine sinon
+const themeMetas = [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => [m, m.content]);
+function setMiamiThemeColor(on) {
+  for (const [meta, original] of themeMetas) {
+    meta.content = on ? (meta.media.includes("dark") ? "#2a0f2e" : "#f7d9e8") : original;
+  }
+}
+
 // Mode Miami en un clic depuis l'en-tête
 $("miami-toggle").addEventListener("click", async () => {
   const btn = $("miami-toggle");
@@ -1450,8 +1468,7 @@ $("miami-toggle").addEventListener("click", async () => {
   try {
     await api("/settings", { miamiMode: on });
     await refresh();
-    showToast(on ? "🌴 Mode Miami activé : lives notifiés seulement pour les chaînes sans carte ou du groupe miami"
-      : "Mode Miami désactivé : alertes de live habituelles");
+    showToast(on ? miamiSummary() : "Mode Miami désactivé : alertes de live habituelles");
   } catch (err) {
     if (err.message !== "auth") $("error").textContent = `⚠ ${err.message}`;
   } finally {

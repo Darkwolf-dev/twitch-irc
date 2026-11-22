@@ -107,19 +107,20 @@ class MentionNotifier {
 
   // Un favori vient de passer en live. mode : "on" (message) ou "ping" (message + mention)
   liveAlert(channel, info, mode, { noCard = false, miami = false } = {}) {
-    const { discordWebhook } = this.getSettings();
+    const { discordWebhook, miamiMode } = this.getSettings();
+    const palm = miamiMode ? "🌴 " : "";
     if (!discordWebhook || mode === "off") return;
     this.log.log(`[discord] Alerte live : ${channel}`);
     const url = `https://www.twitch.tv/${encodeURIComponent(channel)}`;
     this.post(discordWebhook, {
-      summary: `🔴 ${info.displayName || channel} est en live${info.game ? ` sur ${info.game}` : ""}${info.title ? ` : ${info.title}` : ""}`,
+      summary: `${palm}🔴 ${info.displayName || channel} est en live${info.game ? ` sur ${info.game}` : ""}${info.title ? ` : ${info.title}` : ""}`,
       embeds: [{
-        author: { name: `${info.displayName || channel} est en live` },
+        author: { name: `${palm}${info.displayName || channel} est en live` },
         title: info.title?.slice(0, 250) || `Ouvrir ${channel}`,
         url,
         description: [info.game && `🎮 ${info.game}`, noCard && "🃏 Aucune carte de ce streamer", miami && "🌴 Groupe miami"].filter(Boolean).join("\n") || undefined,
         image: info.thumbnail ? { url: `${info.thumbnail}?t=${Date.now()}` } : undefined,
-        color: 0xe91916,
+        color: miamiMode ? 0xff4fa0 : 0xe91916,
         timestamp: info.startedAt,
       }],
     }, mode === "ping", this.isQuiet());
