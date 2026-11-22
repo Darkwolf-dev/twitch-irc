@@ -1941,6 +1941,18 @@ function renderInbox() {
   badge.hidden = unseen === 0 || !$("inbox-menu").hidden;
   badge.textContent = unseen > 9 ? "9+" : String(unseen);
   $("open-inbox").title = unseen ? `Notifications · ${unseen} non vue${unseen > 1 ? "s" : ""}` : "Notifications";
+  // Pastille sur l'icône de l'appli installée
+  if (unseen) navigator.setAppBadge?.(unseen).catch(() => {});
+  else navigator.clearAppBadge?.().catch(() => {});
+}
+
+// Vues dans le panneau : on retire aussi les notifications push encore affichées sur cet appareil
+// (sur Android, c'est ce qui fait disparaître le point sur l'icône)
+async function closeShownNotifications() {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    for (const n of (await reg?.getNotifications()) ?? []) n.close();
+  } catch {}
 }
 
 function renderInboxList() {
@@ -1977,6 +1989,7 @@ function toggleInbox(open = $("inbox-menu").hidden) {
   inboxSnapshot = (lastStatus.inbox ?? []).map((n) => ({ ...n, unseen: unseenIds.has(n.id) }));
   renderInboxList();
   renderInbox();
+  closeShownNotifications();
   if (unseenIds.size) {
     api("/inbox/seen", { ids: [...unseenIds] })
       .then((r) => { lastStatus.inbox = r.inbox; renderInbox(); })

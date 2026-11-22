@@ -63,6 +63,8 @@ self.addEventListener("push", (event) => {
   } catch {
     data = { body: event.data?.text() };
   }
+  // Pastille chiffrée sur l'icône de l'appli installée (là où le système la gère)
+  if (Number.isInteger(data.unseen)) self.navigator.setAppBadge?.(data.unseen).catch(() => {});
   event.waitUntil(self.registration.showNotification(data.title || "Twitch Deck", {
     body: data.body || "",
     icon: data.icon || "icons/icon-192.png",

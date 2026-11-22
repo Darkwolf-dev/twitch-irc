@@ -55,7 +55,8 @@ class MentionNotifier {
     this.inbox?.add({ kind, ...notification });
     if (route !== "push" && discordWebhook) this.post(discordWebhook, payload, mention, silent);
     if (route !== "discord" && this.push) {
-      this.push.send({ ...notification, silent }).catch((err) => this.log.error(`[push] ${err.message}`));
+      const unseen = this.inbox ? this.inbox.items.filter((n) => !n.seenAt).length : undefined;
+      this.push.send({ ...notification, silent, unseen }).catch((err) => this.log.error(`[push] ${err.message}`));
     }
   }
 
