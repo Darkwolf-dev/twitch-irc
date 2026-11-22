@@ -907,8 +907,8 @@ body.miami .miami-decor { display: block; position: fixed; inset: auto 0 0 auto;
 }
 /* Mode Miami : lueur néon autour de l'avatar des chaînes miami en live */
 body.miami #channels li.miami.live .avatar {
-  outline-color: #ff4fa0;
-  box-shadow: 0 0 0 4px rgba(38, 214, 230, .35), 0 0 14px 2px rgba(255, 79, 160, .55);
+  outline-color: #26d6e6;
+  box-shadow: 0 0 0 6px #ff4fa0, 0 0 16px 7px rgba(255, 79, 160, .75);
 }
 /* Mode Miami : fin liseré néon en haut de la page (l'équivalent sur PC de la barre du navigateur colorée) */
 body.miami::before {
