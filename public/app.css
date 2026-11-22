@@ -940,3 +940,5 @@ body.miami::before {
 .inbox-empty { padding: 12px 8px; }
 .inbox-foot { margin: 6px 8px 2px; font-size: 12px; }
 .inbox-badge { background: var(--live-bg); }
+.inbox-list li.seen .inbox-item { opacity: .6; }
+.inbox-list li.seen .inbox-item:hover { opacity: 1; }

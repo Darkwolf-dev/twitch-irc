@@ -1929,21 +1929,9 @@ async function loadMe() {
   }
 }
 
-// --- Centre de notifications (cloche) : « vu » est enregistré par appareil ---
+// --- Centre de notifications (cloche) : vue sur un appareil = vue partout, gardée 24 h ensuite ---
 
-// Identifiant de cet appareil : celui de son abonnement push s'il en a un (il compte alors pour
-// la disparition des alertes), sinon un identifiant local propre à ce navigateur
-function inboxDevice() {
-  if (thisPushId) return thisPushId;
-  let id = null;
-  try { id = localStorage.getItem("td-device"); } catch {}
-  if (!id) {
-    id = `web-${crypto.getRandomValues(new Uint32Array(2)).join("").slice(0, 12)}`;
-    try { localStorage.setItem("td-device", id); } catch {}
-  }
-  return id;
-}
-const unseenHere = () => (lastStatus?.inbox ?? []).filter((n) => !n.seenBy.includes(inboxDevice()));
+const unseenHere = () => (lastStatus?.inbox ?? []).filter((n) => !n.seenAt);
 const INBOX_ICONS = { live: "🔴", chat: "💬", account: "🔐" };
 let inboxSnapshot = null; // contenu affiché pendant que la cloche est ouverte (ne bouge pas sous les yeux)
 
@@ -1960,7 +1948,7 @@ function renderInboxList() {
   $("inbox-clear").disabled = !items.length;
   $("inbox-list").replaceChildren(...(items.length ? items.map((n) => {
     const age = Math.max(0, Math.round((Date.now() - Date.parse(n.at)) / 1000));
-    return el("li", { class: n.unseen ? "unseen" : "" },
+    return el("li", { class: n.unseen ? "unseen" : n.seenAt ? "seen" : "" },
       el("button", {
         type: "button", class: "inbox-item",
         onclick: () => {
@@ -1990,7 +1978,7 @@ function toggleInbox(open = $("inbox-menu").hidden) {
   renderInboxList();
   renderInbox();
   if (unseenIds.size) {
-    api("/inbox/seen", { device: inboxDevice(), ids: [...unseenIds] })
+    api("/inbox/seen", { ids: [...unseenIds] })
       .then((r) => { lastStatus.inbox = r.inbox; renderInbox(); })
       .catch(showError);
   }
@@ -2051,7 +2039,7 @@ function openPendingChannel() {
   pendingChannel = null;
   if (lastStatus.channels.some((c) => c.name === name)) openChannel(name);
   const ids = unseenHere().filter((n) => n.channel === name).map((n) => n.id);
-  if (ids.length) api("/inbox/seen", { device: inboxDevice(), ids }).then((r) => { lastStatus.inbox = r.inbox; renderInbox(); }).catch(() => {});
+  if (ids.length) api("/inbox/seen", { ids }).then((r) => { lastStatus.inbox = r.inbox; renderInbox(); }).catch(() => {});
 }
 navigator.serviceWorker?.addEventListener("message", (e) => {
   if (typeof e.data?.openChannel !== "string") return;

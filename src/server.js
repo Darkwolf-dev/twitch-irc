@@ -406,7 +406,7 @@ function publicSettings() {
 }
 
 const push = new PushSender({ dataDir: DATA_DIR, log });
-const inbox = new Inbox({ dataDir: DATA_DIR, requiredDevices: () => push.devices.map((d) => d.id), log });
+const inbox = new Inbox({ dataDir: DATA_DIR, log });
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
@@ -1145,7 +1145,6 @@ app.post("/push/subscribe", (req, res) => {
 // { "id": "..." } : retire un appareil
 app.post("/push/remove", (req, res) => {
   if (!push.remove(String(req.body?.id ?? ""))) return res.status(404).json({ error: "Appareil inconnu" });
-  inbox.prune(); // un appareil de moins : ses alertes vues ailleurs peuvent partir
   res.json({ ok: true, devices: push.list() });
 });
 
@@ -1158,9 +1157,11 @@ app.post("/push/test", async (req, res) => {
 
 // --- Centre de notifications du panneau ---
 
-// { "device": "…", "ids": ["…"] } : alertes vues sur cet appareil (sans ids : toutes)
+// { "ids": ["…"] } : alertes vues (sur n'importe quel appareil : vues partout). Sans ids : toutes.
 app.post("/inbox/seen", (req, res) => {
-  if (!inbox.markSeen(req.body?.device, req.body?.ids)) return res.status(400).json({ error: "Appareil invalide" });
+  const ids = req.body?.ids;
+  if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100)) return res.status(400).json({ error: "Liste d'alertes invalide" });
+  inbox.markSeen(ids?.map(String));
   res.json({ ok: true, inbox: inbox.list() });
 });
 

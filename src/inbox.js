@@ -1,7 +1,7 @@
 "use strict";
 
-// Centre de notifications du panneau : chaque alerte (live, mention, sécurité…) y est gardée
-// jusqu'à ce que tous les appareils l'aient vue. « Vu » est enregistré par appareil.
+// Centre de notifications du panneau : chaque alerte (live, mention, sécurité…) y est gardée.
+// Vue sur un appareil = vue partout ; une alerte vue reste 24 h dans l'historique, puis disparaît.
 
 const fs = require("fs");
 const path = require("path");
@@ -9,13 +9,11 @@ const crypto = require("crypto");
 
 const MAX_ITEMS = 50;
 const MAX_AGE_MS = 7 * 24 * 3600_000;
-const DEVICE_RE = /^[\w-]{6,40}$/;
+const SEEN_KEEP_MS = 24 * 3600_000;
 
 class Inbox {
-  // requiredDevices() : identifiants des appareils qui doivent avoir vu une alerte pour qu'elle disparaisse
-  constructor({ dataDir, requiredDevices, log }) {
+  constructor({ dataDir, log }) {
     this.file = path.join(dataDir, "inbox.json");
-    this.requiredDevices = requiredDevices;
     this.log = log;
     try {
       this.items = JSON.parse(fs.readFileSync(this.file, "utf8"));
@@ -45,20 +43,19 @@ class Inbox {
       channel: channel || null,
       icon: icon || null,
       at: new Date().toISOString(),
-      seenBy: [],
+      seenAt: null,
     });
     this.prune();
   }
 
-  // Vu sur cet appareil. ids absent : tout ce qui est actuellement dans la boîte.
-  markSeen(device, ids) {
-    if (!DEVICE_RE.test(device ?? "")) return false;
+  // Vu (sur n'importe quel appareil). ids absent : tout ce qui est actuellement dans la boîte.
+  markSeen(ids) {
     const wanted = Array.isArray(ids) ? new Set(ids) : null;
+    const now = new Date().toISOString();
     for (const item of this.items) {
-      if ((!wanted || wanted.has(item.id)) && !item.seenBy.includes(device)) item.seenBy.push(device);
+      if ((!wanted || wanted.has(item.id)) && !item.seenAt) item.seenAt = now;
     }
     this.prune();
-    return true;
   }
 
   clear() {
@@ -66,21 +63,21 @@ class Inbox {
     this.save();
   }
 
-  // Retire ce que tous les appareils ont vu (ou, sans appareil abonné, ce qu'un appareil a vu),
-  // les alertes de plus de 7 jours, et garde les 50 plus récentes
+  // Retire les alertes vues depuis plus de 24 h et celles de plus de 7 jours, garde les 50 plus récentes
   prune() {
-    const required = this.requiredDevices();
     const now = Date.now();
     this.items = this.items
       .filter((item) => now - Date.parse(item.at) < MAX_AGE_MS)
-      .filter((item) => required.length
-        ? !required.every((d) => item.seenBy.includes(d))
-        : item.seenBy.length === 0)
+      .filter((item) => !item.seenAt || now - Date.parse(item.seenAt) < SEEN_KEEP_MS)
+      .map((item) => ({ ...item, seenAt: item.seenAt ?? null, seenBy: undefined })) // ancien format
       .slice(-MAX_ITEMS);
     this.save();
   }
 
+  // Les alertes vues expirent avec le temps, sans autre événement : nettoyage à la lecture
   list() {
+    const now = Date.now();
+    if (this.items.some((item) => item.seenAt && now - Date.parse(item.seenAt) >= SEEN_KEEP_MS)) this.prune();
     return this.items.slice().reverse();
   }
 }
