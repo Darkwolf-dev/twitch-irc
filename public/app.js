@@ -1108,6 +1108,7 @@ function renderSettings() {
     $("quiet-start").value = s.quietHours.start;
     $("quiet-end").value = s.quietHours.end;
   }
+  renderPush();
   const sc = lastStatus.sanctions;
   $("sanctions-count").textContent = sc.active ? `⚠ ${sc.active}` : "";
   $("sanctions-count").title = sc.active ? `${sc.active} sanction(s) en cours` : "";
@@ -1184,6 +1185,7 @@ $("discord-form").addEventListener("submit", (e) => {
     discordUserId: $("discord-user-id").value.trim(),
     discordLiveAlerts: $("live-alerts").value,
     discordNoCardAlerts: $("nocard-alerts").value,
+    pushRoutes: Object.fromEntries([...document.querySelectorAll(".push-route")].map((s) => [s.dataset.kind, s.value])),
     quietHours: {
       enabled: $("quiet-enabled").checked,
       start: $("quiet-start").value,
@@ -1466,6 +1468,106 @@ function setMiamiThemeColor(on) {
     meta.content = on ? (meta.media.includes("dark") ? "#2a0f2e" : "#f7d9e8") : original;
   }
 }
+
+// --- Notifications push (Android, PC) ---
+
+const PUSH_ROUTE_LABELS = { discord: "Discord seulement", push: "Push seulement", both: "Discord + push" };
+for (const select of document.querySelectorAll(".push-route")) {
+  select.append(...Object.entries(PUSH_ROUTE_LABELS).map(([value, label]) => el("option", { value }, label)));
+}
+const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+// Clé publique du serveur (base64url) → octets attendus par pushManager.subscribe
+function keyBytes(b64) {
+  const raw = atob((b64 + "=".repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+// Même identifiant que le serveur : 12 premiers caractères du SHA-256 de l'adresse d'abonnement
+async function pushId(endpoint) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
+}
+async function currentPushSubscription() {
+  if (!pushSupported) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+function deviceLabel() {
+  const ua = navigator.userAgent;
+  const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone" : /Windows/.test(ua) ? "Windows"
+    : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "Appareil";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari" : "Navigateur";
+  return `${browser} · ${os}`;
+}
+
+let thisPushId = null;
+async function renderPush() {
+  const s = lastStatus.settings;
+  for (const select of document.querySelectorAll(".push-route")) {
+    if (document.activeElement !== select) select.value = s.pushRoutes[select.dataset.kind];
+  }
+  const support = $("push-support");
+  if (!pushSupported) {
+    support.hidden = false;
+    support.textContent = "⚠ Ce navigateur ne gère pas les notifications push. Sur Android, ouvre le panneau dans Chrome.";
+  } else if (Notification.permission === "denied") {
+    support.hidden = false;
+    support.textContent = "⚠ Notifications bloquées pour ce site : autorise-les dans les réglages du navigateur (cadenas à gauche de l'adresse).";
+  } else {
+    support.hidden = true;
+  }
+  const sub = await currentPushSubscription().catch(() => null);
+  thisPushId = sub ? await pushId(sub.endpoint) : null;
+  const subscribedHere = Boolean(thisPushId && s.pushDevices.some((d) => d.id === thisPushId));
+  const button = $("push-enable");
+  button.textContent = subscribedHere ? "Désactiver sur cet appareil" : "Activer sur cet appareil";
+  button.classList.toggle("ghost", subscribedHere);
+  button.disabled = !pushSupported || Notification.permission === "denied";
+  $("push-test").disabled = !s.pushDevices.length;
+  $("push-devices").replaceChildren(...s.pushDevices.map((d) => el("li", {},
+    el("span", {}, d.label, d.id === thisPushId ? el("span", { class: "hint" }, " · cet appareil") : ""),
+    el("button", {
+      type: "button", class: "ghost small", "aria-label": `Retirer ${d.label}`,
+      onclick: () => pushAction(async () => {
+        if (d.id === thisPushId) await (await currentPushSubscription())?.unsubscribe();
+        await api("/push/remove", { id: d.id });
+      }, `${d.label} retiré.`),
+    }, "Retirer"))));
+}
+
+async function pushAction(fn, message) {
+  $("push-status").textContent = "";
+  try {
+    await fn();
+    await refresh();
+    $("push-status").textContent = message;
+  } catch (err) {
+    if (err.message !== "auth") $("push-status").textContent = `⚠ ${err.message}`;
+  }
+}
+
+$("push-enable").addEventListener("click", () => {
+  const button = $("push-enable");
+  const wasOn = lastStatus.settings.pushDevices.some((d) => d.id === thisPushId);
+  button.disabled = true;
+  pushAction(async () => {
+    const sub = await currentPushSubscription();
+    if (sub && lastStatus.settings.pushDevices.some((d) => d.id === thisPushId)) {
+      await sub.unsubscribe();
+      await api("/push/remove", { id: thisPushId }).catch(() => {});
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Notifications refusées : autorise-les pour ce site dans les réglages du navigateur");
+    const reg = await navigator.serviceWorker.ready;
+    const fresh = sub ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(lastStatus.settings.pushKey) });
+    await api("/push/subscribe", { subscription: fresh.toJSON(), label: deviceLabel() });
+  }, wasOn ? "Notifications désactivées sur cet appareil." : "Notifications activées sur cet appareil. Clique sur « Envoyer un test » pour vérifier.").finally(() => { button.disabled = false; });
+});
+
+$("push-test").addEventListener("click", () =>
+  pushAction(() => api("/push/test", {}), "Test envoyé : la notification devrait apparaître dans quelques secondes."));
 
 // Mode Miami en un clic depuis l'en-tête
 $("miami-toggle").addEventListener("click", async () => {
@@ -1847,12 +1949,27 @@ $("menu-settings").addEventListener("click", () => {
   openSettings();
 });
 
+// Fiche à ouvrir après un appui sur une notification push (?chaine=…, ou message du service worker)
+let pendingChannel = new URLSearchParams(location.search).get("chaine");
+if (pendingChannel) history.replaceState(null, "", location.pathname);
+function openPendingChannel() {
+  if (!pendingChannel || !lastStatus) return;
+  const name = pendingChannel.toLowerCase();
+  pendingChannel = null;
+  if (lastStatus.channels.some((c) => c.name === name)) openChannel(name);
+}
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  if (typeof e.data?.openChannel !== "string") return;
+  pendingChannel = e.data.openChannel;
+  openPendingChannel();
+});
+
 function start() {
   $("login").hidden = true;
   $("panel").hidden = false;
   $("error").textContent = "";
   loadMe();
-  refresh();
+  refresh().then(openPendingChannel);
   clearInterval(timer);
   timer = setInterval(() => { if (busy.size === 0) refresh(); }, 3000);
 }

@@ -13,6 +13,7 @@ const { LiveMonitor } = require("./live");
 const { EventLog, summarize } = require("./events");
 const { SessionStore, readCookie, cookieHeader, COOKIE, SESSION_TTL_MS } = require("./sessions");
 const { MentionNotifier, isWebhookUrl, isDiscordUserId, formatDuration } = require("./discord");
+const { PushSender } = require("./push");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
 const { AvatarStore } = require("./avatars");
@@ -215,7 +216,7 @@ const live = new LiveMonitor({
       ? [(noCard || miami) && "ping"]
       : [favorites.has(channel) && settings.discordLiveAlerts, noCard && settings.discordNoCardAlerts];
     const mode = ["ping", "on"].find((m) => modes.includes(m));
-    if (mode) notifier.liveAlert(channel, info, mode, { noCard, miami });
+    if (mode) notifier.liveAlert(channel, info, mode, { noCard, miami, avatar: avatars.url(channel)?.replace("70x70", "300x300") });
   },
   onAuthFailure: () => tokens.invalidate(),
   log,
@@ -288,6 +289,19 @@ const alwaysCount = () => [...enabled].filter((n) => !liveOnly.has(n)).length;
 
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const DEFAULT_SCHEDULE = { enabled: false, start: "18:00", end: "02:00", timeZone: "Europe/Paris" };
+const DEFAULT_PUSH_ROUTES = { live: "both", chat: "discord", account: "discord" };
+const PUSH_ROUTES = ["discord", "push", "both"];
+// Réglage complet et valide, ou null
+function validPushRoutes(value) {
+  if (!value || typeof value !== "object") return null;
+  const out = {};
+  for (const kind of Object.keys(DEFAULT_PUSH_ROUTES)) {
+    const route = value[kind] ?? DEFAULT_PUSH_ROUTES[kind];
+    if (!PUSH_ROUTES.includes(route)) return null;
+    out[kind] = route;
+  }
+  return out;
+}
 const settings = {
   maxConcurrent: maxChannels,
   priorityGroup: "",       // ses chaînes en live passent avant toutes les autres sous le plafond
@@ -306,6 +320,9 @@ const settings = {
   quietHours: { enabled: false, start: "01:00", end: "09:00", timeZone: "Europe/Paris" },
   // Mode Miami : @ Discord seulement pour les lives des chaînes sans carte ou du groupe « miami »
   miamiMode: false,
+  // Destination de chaque type d'alerte : "discord" | "push" | "both"
+  //   live : débuts de live · chat : mentions et personnes surveillées · account : timeouts, bans, sécurité
+  pushRoutes: { ...DEFAULT_PUSH_ROUTES },
   schedule: { ...DEFAULT_SCHEDULE },
 };
 try {
@@ -321,6 +338,7 @@ if (!["off", "on", "ping"].includes(settings.discordLiveAlerts)) settings.discor
 if (!["off", "on", "ping"].includes(settings.discordNoCardAlerts)) settings.discordNoCardAlerts = "ping";
 if (typeof settings.allowSecretLogin !== "boolean") settings.allowSecretLogin = true;
 settings.miamiMode = settings.miamiMode === true;
+settings.pushRoutes = validPushRoutes(settings.pushRoutes) ?? { ...DEFAULT_PUSH_ROUTES };
 settings.ircPaused = settings.ircPaused === true;
 settings.dormantDays = Math.min(365, Math.max(7, Number(settings.dormantDays) || 30));
 if (!Array.isArray(settings.dormantKeep)) settings.dormantKeep = [];
@@ -378,15 +396,20 @@ function publicSettings() {
     quietHours: settings.quietHours,
     quietNow: quietNow(),
     miamiMode: settings.miamiMode,
+    pushRoutes: settings.pushRoutes,
+    pushKey: push.publicKey,
+    pushDevices: push.list(),
     schedule: settings.schedule,
     scheduleOpen: scheduleOpen(),
   };
 }
 
+const push = new PushSender({ dataDir: DATA_DIR, log });
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
   isQuiet: () => quietNow(),
+  push,
   log,
 });
 
@@ -995,7 +1018,7 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { maxConcurrent, priorityGroup, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours, miamiMode } = req.body ?? {};
+  const { maxConcurrent, priorityGroup, discordWebhook, discordUserId, mentionKeywords, watchedUsers, discordLiveAlerts, discordNoCardAlerts, schedule, allowSecretLogin, quietHours, miamiMode, pushRoutes } = req.body ?? {};
   const newPriority = priorityGroup === undefined ? undefined : priorityGroup === "" ? "" : normalizeGroup(priorityGroup);
   if (newPriority === null) return res.status(400).json({ error: "Nom de groupe prioritaire invalide" });
   const newQuiet = quietHours === undefined ? undefined : validSchedule(quietHours);
@@ -1013,6 +1036,8 @@ app.post("/settings", (req, res) => {
   if (discordNoCardAlerts !== undefined && !["off", "on", "ping"].includes(discordNoCardAlerts)) {
     return res.status(400).json({ error: `"discordNoCardAlerts" doit valoir off, on ou ping` });
   }
+  const newPushRoutes = pushRoutes === undefined ? undefined : validPushRoutes(pushRoutes);
+  if (newPushRoutes === null) return res.status(400).json({ error: `"pushRoutes" : chaque valeur doit être discord, push ou both` });
   if (miamiMode !== undefined && typeof miamiMode !== "boolean") {
     return res.status(400).json({ error: `"miamiMode" doit valoir true ou false` });
   }
@@ -1069,6 +1094,7 @@ app.post("/settings", (req, res) => {
   if (discordUserId !== undefined) settings.discordUserId = discordUserId;
   if (discordLiveAlerts !== undefined) settings.discordLiveAlerts = discordLiveAlerts;
   if (discordNoCardAlerts !== undefined) settings.discordNoCardAlerts = discordNoCardAlerts;
+  if (newPushRoutes) settings.pushRoutes = newPushRoutes;
   if (miamiMode !== undefined && miamiMode !== settings.miamiMode) {
     settings.miamiMode = miamiMode;
     log.log(`[api] Mode Miami ${miamiMode ? "activé" : "désactivé"}`);
@@ -1101,6 +1127,28 @@ app.post("/settings/test-discord", async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// --- Notifications push du navigateur ---
+
+// { "subscription": PushSubscription.toJSON(), "label": "Pixel 8" } : abonne cet appareil
+app.post("/push/subscribe", (req, res) => {
+  const error = push.add(req.body?.subscription, req.body?.label);
+  if (error) return res.status(400).json({ error });
+  res.json({ ok: true, devices: push.list() });
+});
+
+// { "id": "..." } : retire un appareil
+app.post("/push/remove", (req, res) => {
+  if (!push.remove(String(req.body?.id ?? ""))) return res.status(404).json({ error: "Appareil inconnu" });
+  res.json({ ok: true, devices: push.list() });
+});
+
+app.post("/push/test", async (req, res) => {
+  if (!push.devices.length) return res.status(400).json({ error: "Aucun appareil abonné" });
+  const sent = await push.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront ici.", tag: "test" });
+  if (!sent) return res.status(502).json({ error: "Aucun appareil n'a accepté la notification" });
+  res.json({ ok: true, sent });
 });
 
 // --- Sanctions : historique et levée manuelle ---

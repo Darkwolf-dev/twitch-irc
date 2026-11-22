@@ -53,3 +53,40 @@ self.addEventListener("fetch", (event) => {
       .catch(() => offlinePage())
   );
 });
+
+// --- Notifications push : alertes envoyées par le serveur (débuts de live, mentions…) ---
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data?.text() };
+  }
+  event.waitUntil(self.registration.showNotification(data.title || "Twitch Deck", {
+    body: data.body || "",
+    icon: data.icon || "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+    image: data.image,
+    tag: data.tag,
+    renotify: Boolean(data.tag),
+    silent: Boolean(data.silent),
+    data: { channel: data.channel || null },
+  }));
+});
+
+// Appui sur la notification : ouvre Twitch Deck sur la fiche de la chaîne concernée, en réutilisant
+// le panneau s'il est déjà ouvert
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const channel = event.notification.data?.channel;
+  event.waitUntil((async () => {
+    const tabs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const panel = tabs.find((t) => new URL(t.url).origin === self.location.origin);
+    if (panel) {
+      if (channel) panel.postMessage({ openChannel: channel });
+      return panel.focus();
+    }
+    return self.clients.openWindow(channel ? `/?chaine=${encodeURIComponent(channel)}` : "/");
+  })());
+});

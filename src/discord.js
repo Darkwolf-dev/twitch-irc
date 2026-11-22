@@ -25,13 +25,36 @@ function buildMatcher(keywords) {
 }
 
 class MentionNotifier {
-  constructor({ getSettings, getUsername, isQuiet = () => false, log }) {
+  constructor({ getSettings, getUsername, isQuiet = () => false, push = null, log }) {
     this.getSettings = getSettings;
     this.getUsername = getUsername;
+    this.push = push; // notifications push du navigateur (src/push.js)
     this.isQuiet = isQuiet; // heures calmes : messages envoyés en @silent (mention gardée, sans son ni push)
     this.log = log;
     this.sent = []; // horodatages des envois (limite anti-spam)
     this.dropped = 0;
+  }
+
+  // Où part chaque type d'alerte : "discord" | "push" | "both"
+  route(kind) {
+    return this.getSettings().pushRoutes?.[kind] ?? "discord";
+  }
+
+  // Au moins une destination possible pour ce type d'alerte
+  canSend(kind) {
+    const route = this.route(kind);
+    return Boolean((route !== "push" && this.getSettings().discordWebhook) ||
+      (route !== "discord" && this.push?.devices.length));
+  }
+
+  // Envoie sur Discord et/ou en push selon le réglage du type d'alerte
+  deliver(kind, payload, mention, silent, notification) {
+    const route = this.route(kind);
+    const { discordWebhook } = this.getSettings();
+    if (route !== "push" && discordWebhook) this.post(discordWebhook, payload, mention, silent);
+    if (route !== "discord" && this.push) {
+      this.push.send({ ...notification, silent }).catch((err) => this.log.error(`[push] ${err.message}`));
+    }
   }
 
   keywords() {
@@ -61,9 +84,8 @@ class MentionNotifier {
   }
 
   handle(message) {
-    const { discordWebhook } = this.getSettings();
     const me = this.getUsername();
-    if (!discordWebhook || !me || message.login === me) return;
+    if (!this.canSend("chat") || !me || message.login === me) return;
 
     const watch = this.watchedMatch(message);
     if (watch) return this.watchAlert(message, watch);
@@ -75,7 +97,7 @@ class MentionNotifier {
     if (!this.allowSend(now)) return;
 
     this.log.log(`[discord] Mention de ${message.user} dans #${message.channel}`);
-    this.post(discordWebhook, {
+    this.deliver("chat", {
       summary: `💬 ${message.user} dans #${message.channel} : ${message.text}`,
       embeds: [{
         author: { name: `${message.user} ${isReply ? "t'a répondu" : "t'a mentionné"} dans #${message.channel}` },
@@ -85,14 +107,19 @@ class MentionNotifier {
         color: 0x9146ff,
         timestamp: new Date(now).toISOString(),
       }],
-    }, true, this.isQuiet());
+    }, true, this.isQuiet(), {
+      title: `💬 ${message.user} ${isReply ? "t'a répondu" : "t'a mentionné"} dans #${message.channel}`,
+      body: message.text.slice(0, 300),
+      channel: message.channel,
+      tag: `chat-${message.channel}`,
+    });
   }
 
   watchAlert(message, { who, wrote }) {
     const now = Date.now();
     if (!this.allowSend(now)) return;
     this.log.log(`[discord] ${who} ${wrote ? "a écrit" : "cité"} dans #${message.channel}`);
-    this.post(this.getSettings().discordWebhook, {
+    this.deliver("chat", {
       summary: `👀 ${message.user} dans #${message.channel} : ${message.text}`,
       embeds: [{
         author: { name: wrote ? `👀 ${message.user} a écrit dans #${message.channel}` : `👀 ${message.user} parle de ${who} dans #${message.channel}` },
@@ -102,17 +129,22 @@ class MentionNotifier {
         color: 0x22c55e,
         timestamp: new Date(now).toISOString(),
       }],
-    }, true, false);
+    }, true, false, {
+      title: wrote ? `👀 ${message.user} a écrit dans #${message.channel}` : `👀 ${message.user} parle de ${who} dans #${message.channel}`,
+      body: message.text.slice(0, 300),
+      channel: message.channel,
+      tag: `watch-${message.channel}`,
+    });
   }
 
   // Un favori vient de passer en live. mode : "on" (message) ou "ping" (message + mention)
-  liveAlert(channel, info, mode, { noCard = false, miami = false } = {}) {
-    const { discordWebhook, miamiMode } = this.getSettings();
+  liveAlert(channel, info, mode, { noCard = false, miami = false, avatar = null } = {}) {
+    const { miamiMode } = this.getSettings();
     const palm = miamiMode ? "🌴 " : "";
-    if (!discordWebhook || mode === "off") return;
+    if (!this.canSend("live") || mode === "off") return;
     this.log.log(`[discord] Alerte live : ${channel}`);
     const url = `https://www.twitch.tv/${encodeURIComponent(channel)}`;
-    this.post(discordWebhook, {
+    this.deliver("live", {
       summary: `${palm}🔴 ${info.displayName || channel} est en live${info.game ? ` sur ${info.game}` : ""}${info.title ? ` : ${info.title}` : ""}`,
       embeds: [{
         author: { name: `${palm}${info.displayName || channel} est en live` },
@@ -123,15 +155,21 @@ class MentionNotifier {
         color: miamiMode ? 0xff4fa0 : 0xe91916,
         timestamp: info.startedAt,
       }],
-    }, mode === "ping", this.isQuiet());
+    }, mode === "ping", this.isQuiet(), {
+      title: `${palm}🔴 ${info.displayName || channel} est en live`,
+      body: [info.game, info.title].filter(Boolean).join(" · ").slice(0, 300) || "Ouvrir la chaîne",
+      channel,
+      icon: avatar || undefined,
+      image: info.thumbnail ? `${info.thumbnail}?t=${Date.now()}` : undefined,
+      tag: `live-${channel}`,
+    });
   }
 
   // Notre compte a été timeout ou banni d'un chat
   sanctionAlert({ channel, type, duration }) {
-    const { discordWebhook } = this.getSettings();
-    if (!discordWebhook) return;
+    if (!this.canSend("account")) return;
     const what = type === "ban" ? "⛔ Banni" : `⏱ Timeout ${formatDuration(duration)}`;
-    this.post(discordWebhook, {
+    this.deliver("account", {
       summary: `${what} sur #${channel}`,
       embeds: [{
         title: `${what} sur #${channel}`,
@@ -142,14 +180,18 @@ class MentionNotifier {
         color: type === "ban" ? 0xef4444 : 0xf59e0b,
         timestamp: new Date().toISOString(),
       }],
-    }, true, this.isQuiet());
+    }, true, this.isQuiet(), {
+      title: `${what} sur #${channel}`,
+      body: type === "ban" ? "Un modérateur a banni ton compte de ce chat." : "Un modérateur t'a temporairement réduit au silence.",
+      channel,
+      tag: `sanction-${channel}`,
+    });
   }
 
   // Alerte de sécurité (connexion, blocage d'IP…) : toujours avec mention
   securityAlert(title, details) {
-    const { discordWebhook } = this.getSettings();
-    if (!discordWebhook) return;
-    this.post(discordWebhook, {
+    if (!this.canSend("account")) return;
+    this.deliver("account", {
       summary: `🔐 ${title}`,
       embeds: [{
         title: `🔐 ${title}`,
@@ -157,14 +199,17 @@ class MentionNotifier {
         color: 0xf59e0b,
         timestamp: new Date().toISOString(),
       }],
+    }, true, false, {
+      title: `🔐 ${title}`,
+      body: details.replace(/\*\*/g, "").slice(0, 300),
+      tag: "security",
     });
   }
 
   // Token Twitch refusé : l'IRC ne peut plus se connecter tant que le compte n'est pas reconnecté
   tokenAlert(reason) {
-    const { discordWebhook } = this.getSettings();
-    if (!discordWebhook) return;
-    this.post(discordWebhook, {
+    if (!this.canSend("account")) return;
+    this.deliver("account", {
       summary: "🔌 Compte Twitch déconnecté : ouvre le panneau et clique sur Reconnecter",
       embeds: [{
         title: "🔌 Compte Twitch déconnecté",
@@ -172,6 +217,10 @@ class MentionNotifier {
         color: 0xef4444,
         timestamp: new Date().toISOString(),
       }],
+    }, true, false, {
+      title: "🔌 Compte Twitch déconnecté",
+      body: "Ouvre le panneau et clique sur Reconnecter.",
+      tag: "token",
     });
   }
 

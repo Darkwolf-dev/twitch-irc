@@ -259,6 +259,24 @@
             </div>
 
             <div class="card">
+              <h3>Notifications push</h3>
+              <p class="hint">Les alertes arrivent directement sur ce téléphone ou ce PC, comme une appli. Active-les sur chaque appareil.</p>
+              <p id="push-support" class="hint" hidden></p>
+              <div class="bulk">
+                <button type="button" id="push-enable">Activer sur cet appareil</button>
+                <button type="button" id="push-test" class="ghost">Envoyer un test</button>
+              </div>
+              <ul id="push-devices" class="push-devices"></ul>
+              <label for="push-live">Débuts de live</label>
+              <select id="push-live" class="push-route" data-kind="live"></select>
+              <label for="push-chat">Mentions et personnes surveillées</label>
+              <select id="push-chat" class="push-route" data-kind="chat"></select>
+              <label for="push-account">Timeouts, bans et sécurité</label>
+              <select id="push-account" class="push-route" data-kind="account"></select>
+              <p id="push-status" class="hint" role="status"></p>
+            </div>
+
+            <div class="card">
               <h3>Quoi notifier</h3>
               <label for="mention-keywords">Mentions : mots qui déclenchent une notification</label>
               <input id="mention-keywords" autocomplete="off" placeholder="ton pseudo Twitch (par défaut)">

@@ -916,3 +916,8 @@ body.miami::before {
   background: linear-gradient(90deg, #ff4fa0, #ff8a3d 50%, #26d6e6);
   box-shadow: 0 0 8px rgba(255, 79, 160, .6), 0 0 14px rgba(38, 214, 230, .3);
 }
+
+/* Appareils abonnés aux notifications push */
+.push-devices { list-style: none; margin: 8px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.push-devices:empty { display: none; }
+.push-devices li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; }
