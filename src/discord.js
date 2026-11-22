@@ -25,7 +25,8 @@ function buildMatcher(keywords) {
 }
 
 class MentionNotifier {
-  constructor({ getSettings, getUsername, isQuiet = () => false, push = null, log }) {
+  constructor({ getSettings, getUsername, isQuiet = () => false, push = null, inbox = null, log }) {
+    this.inbox = inbox; // centre de notifications du panneau (src/inbox.js)
     this.getSettings = getSettings;
     this.getUsername = getUsername;
     this.push = push; // notifications push du navigateur (src/push.js)
@@ -51,6 +52,7 @@ class MentionNotifier {
   deliver(kind, payload, mention, silent, notification) {
     const route = this.route(kind);
     const { discordWebhook } = this.getSettings();
+    this.inbox?.add({ kind, ...notification });
     if (route !== "push" && discordWebhook) this.post(discordWebhook, payload, mention, silent);
     if (route !== "discord" && this.push) {
       this.push.send({ ...notification, silent }).catch((err) => this.log.error(`[push] ${err.message}`));

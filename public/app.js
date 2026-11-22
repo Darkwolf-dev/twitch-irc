@@ -110,6 +110,7 @@ function logout(message) {
   $("open-settings").hidden = true;
   $("open-drops").hidden = true;
   $("miami-toggle").hidden = true;
+  $("inbox-wrap").hidden = true;
   $("profile-box").hidden = true;
   if ($("settings-dialog").open) $("settings-dialog").close();
   showLogin(message);
@@ -414,6 +415,7 @@ function render() {
     return setView("all");
   }
   renderGroupTabs();
+  renderInbox();
 
   const pill = $("irc");
   pill.hidden = false;
@@ -1920,11 +1922,102 @@ async function loadMe() {
     $("open-settings").hidden = false;
     $("open-drops").hidden = false;
     $("miami-toggle").hidden = false;
+    $("inbox-wrap").hidden = false;
     $("profile-box").hidden = false;
   } catch (err) {
     $("account").hidden = true;
   }
 }
+
+// --- Centre de notifications (cloche) : « vu » est enregistré par appareil ---
+
+// Identifiant de cet appareil : celui de son abonnement push s'il en a un (il compte alors pour
+// la disparition des alertes), sinon un identifiant local propre à ce navigateur
+function inboxDevice() {
+  if (thisPushId) return thisPushId;
+  let id = null;
+  try { id = localStorage.getItem("td-device"); } catch {}
+  if (!id) {
+    id = `web-${crypto.getRandomValues(new Uint32Array(2)).join("").slice(0, 12)}`;
+    try { localStorage.setItem("td-device", id); } catch {}
+  }
+  return id;
+}
+const unseenHere = () => (lastStatus?.inbox ?? []).filter((n) => !n.seenBy.includes(inboxDevice()));
+const INBOX_ICONS = { live: "🔴", chat: "💬", account: "🔐" };
+let inboxSnapshot = null; // contenu affiché pendant que la cloche est ouverte (ne bouge pas sous les yeux)
+
+function renderInbox() {
+  const unseen = unseenHere().length;
+  const badge = $("inbox-badge");
+  badge.hidden = unseen === 0 || !$("inbox-menu").hidden;
+  badge.textContent = unseen > 9 ? "9+" : String(unseen);
+  $("open-inbox").title = unseen ? `Notifications · ${unseen} non vue${unseen > 1 ? "s" : ""}` : "Notifications";
+}
+
+function renderInboxList() {
+  const items = inboxSnapshot ?? [];
+  $("inbox-clear").disabled = !items.length;
+  $("inbox-list").replaceChildren(...(items.length ? items.map((n) => {
+    const age = Math.max(0, Math.round((Date.now() - Date.parse(n.at)) / 1000));
+    return el("li", { class: n.unseen ? "unseen" : "" },
+      el("button", {
+        type: "button", class: "inbox-item",
+        onclick: () => {
+          toggleInbox(false);
+          if (n.channel && lastStatus.channels.some((c) => c.name === n.channel)) openChannel(n.channel);
+        },
+      },
+      n.icon ? el("img", { class: "inbox-icon", src: n.icon, alt: "" }) : el("span", { class: "inbox-icon", "aria-hidden": "true" }, INBOX_ICONS[n.kind] ?? "🔔"),
+      el("span", { class: "inbox-text" },
+        el("span", { class: "inbox-title" }, n.title),
+        n.body && el("span", { class: "inbox-body" }, n.body),
+        el("span", { class: "inbox-age" }, formatAge(age)))));
+  }) : [el("li", { class: "inbox-empty hint" }, "Rien de nouveau.")]));
+}
+
+function toggleInbox(open = $("inbox-menu").hidden) {
+  $("inbox-menu").hidden = !open;
+  $("open-inbox").setAttribute("aria-expanded", String(open));
+  if (!open) {
+    inboxSnapshot = null;
+    renderInbox();
+    return;
+  }
+  // Ouvrir la cloche = tout voir sur cet appareil
+  const unseenIds = new Set(unseenHere().map((n) => n.id));
+  inboxSnapshot = (lastStatus.inbox ?? []).map((n) => ({ ...n, unseen: unseenIds.has(n.id) }));
+  renderInboxList();
+  renderInbox();
+  if (unseenIds.size) {
+    api("/inbox/seen", { device: inboxDevice(), ids: [...unseenIds] })
+      .then((r) => { lastStatus.inbox = r.inbox; renderInbox(); })
+      .catch(showError);
+  }
+}
+$("open-inbox").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleInbox();
+});
+$("inbox-menu").addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => { if (!$("inbox-menu").hidden) toggleInbox(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("inbox-menu").hidden) {
+    toggleInbox(false);
+    $("open-inbox").focus();
+  }
+});
+$("inbox-clear").addEventListener("click", async () => {
+  try {
+    const r = await api("/inbox/clear", {});
+    lastStatus.inbox = r.inbox;
+    inboxSnapshot = [];
+    renderInboxList();
+    renderInbox();
+  } catch (err) {
+    showError(err);
+  }
+});
 
 // Menu du compte (avatar en haut à droite)
 function toggleAccountMenu(open = $("account-menu").hidden) {
@@ -1957,6 +2050,8 @@ function openPendingChannel() {
   const name = pendingChannel.toLowerCase();
   pendingChannel = null;
   if (lastStatus.channels.some((c) => c.name === name)) openChannel(name);
+  const ids = unseenHere().filter((n) => n.channel === name).map((n) => n.id);
+  if (ids.length) api("/inbox/seen", { device: inboxDevice(), ids }).then((r) => { lastStatus.inbox = r.inbox; renderInbox(); }).catch(() => {});
 }
 navigator.serviceWorker?.addEventListener("message", (e) => {
   if (typeof e.data?.openChannel !== "string") return;

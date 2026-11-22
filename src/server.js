@@ -14,6 +14,7 @@ const { EventLog, summarize } = require("./events");
 const { SessionStore, readCookie, cookieHeader, COOKIE, SESSION_TTL_MS } = require("./sessions");
 const { MentionNotifier, isWebhookUrl, isDiscordUserId, formatDuration } = require("./discord");
 const { PushSender } = require("./push");
+const { Inbox } = require("./inbox");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
 const { AvatarStore } = require("./avatars");
@@ -405,11 +406,13 @@ function publicSettings() {
 }
 
 const push = new PushSender({ dataDir: DATA_DIR, log });
+const inbox = new Inbox({ dataDir: DATA_DIR, requiredDevices: () => push.devices.map((d) => d.id), log });
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
   isQuiet: () => quietNow(),
   push,
+  inbox,
   log,
 });
 
@@ -597,6 +600,7 @@ function fullStatus() {
   };
   status.live = live.status();
   status.token = tokens.status();
+  status.inbox = inbox.list();
 
   const sizes = new Map();
   for (const set of groups.values()) for (const g of set) sizes.set(g, (sizes.get(g) ?? 0) + 1);
@@ -1141,6 +1145,7 @@ app.post("/push/subscribe", (req, res) => {
 // { "id": "..." } : retire un appareil
 app.post("/push/remove", (req, res) => {
   if (!push.remove(String(req.body?.id ?? ""))) return res.status(404).json({ error: "Appareil inconnu" });
+  inbox.prune(); // un appareil de moins : ses alertes vues ailleurs peuvent partir
   res.json({ ok: true, devices: push.list() });
 });
 
@@ -1149,6 +1154,19 @@ app.post("/push/test", async (req, res) => {
   const sent = await push.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront ici.", tag: "test" });
   if (!sent) return res.status(502).json({ error: "Aucun appareil n'a accepté la notification" });
   res.json({ ok: true, sent });
+});
+
+// --- Centre de notifications du panneau ---
+
+// { "device": "…", "ids": ["…"] } : alertes vues sur cet appareil (sans ids : toutes)
+app.post("/inbox/seen", (req, res) => {
+  if (!inbox.markSeen(req.body?.device, req.body?.ids)) return res.status(400).json({ error: "Appareil invalide" });
+  res.json({ ok: true, inbox: inbox.list() });
+});
+
+app.post("/inbox/clear", (req, res) => {
+  inbox.clear();
+  res.json({ ok: true, inbox: [] });
 });
 
 // --- Sanctions : historique et levée manuelle ---

@@ -64,6 +64,20 @@
     </div>
     <div class="who">
       <button type="button" id="irc" class="pill" hidden></button>
+      <span class="badge-wrap inbox-wrap" id="inbox-wrap" hidden>
+        <button type="button" id="open-inbox" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-controls="inbox-menu" aria-label="Notifications" title="Notifications">
+          <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </button>
+        <span id="inbox-badge" class="count-badge inbox-badge" hidden></span>
+        <div id="inbox-menu" class="account-menu inbox-menu" role="dialog" aria-label="Notifications" hidden>
+          <div class="inbox-head">
+            <strong>Notifications</strong>
+            <button type="button" id="inbox-clear" class="ghost small">Tout effacer</button>
+          </div>
+          <ul id="inbox-list" class="inbox-list"></ul>
+          <p class="hint inbox-foot">Une alerte disparaît quand tu l'as vue sur tous tes appareils abonnés aux notifications push.</p>
+        </div>
+      </span>
       <button type="button" id="miami-toggle" class="icon-btn miami-toggle" aria-pressed="false" aria-label="Mode Miami" title="Mode Miami : débuts de live notifiés (avec mention) seulement pour les chaînes sans aucune carte ou du groupe « miami »" hidden>🌴</button>
       <button type="button" id="open-drops" class="icon-btn" aria-label="Radar à drops" title="Radar à drops" hidden>
         <svg class="v2-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 1 1 4.5-2 2.5 2.5 0 1 1 4.5 2"/></svg>
