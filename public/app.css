@@ -837,21 +837,31 @@ body.compact .switch input:checked + span::after { transform: translateX(14px); 
   body.compact li .last-live, body.compact .v2 #channels li .detail { display: none; }
 }
 
-/* Mode Miami : lueurs coucher de soleil néon, discrètes, dans le fond de page (fixes au défilement,
-   donc les barres collantes qui reprennent var(--bg) restent raccord) */
+/* Mode Miami : lueurs coucher de soleil néon dans le fond de page (fixes au défilement, donc les
+   barres collantes qui reprennent var(--bg) restent raccord), et surfaces un peu translucides
+   pour que le fond transparaisse derrière la liste et les cartes */
 body.miami {
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-2: rgba(240, 240, 244, 0.72);
   --bg:
-    radial-gradient(70% 45% at 100% 0%, rgba(255, 94, 148, 0.10), transparent 70%) fixed,
-    radial-gradient(55% 40% at 0% 100%, rgba(38, 214, 230, 0.08), transparent 70%) fixed,
-    linear-gradient(180deg, rgba(255, 166, 77, 0.05), transparent 30%) fixed,
+    radial-gradient(60% 55% at 100% 0%, rgba(255, 94, 148, 0.30), transparent 70%) fixed,
+    radial-gradient(55% 50% at 0% 100%, rgba(38, 214, 230, 0.24), transparent 70%) fixed,
+    radial-gradient(45% 35% at 15% 0%, rgba(255, 166, 77, 0.20), transparent 70%) fixed,
     #f6f6f8;
 }
 @media (prefers-color-scheme: dark) {
   body.miami {
+    --surface: rgba(24, 24, 27, 0.72);
+    --surface-2: rgba(31, 31, 35, 0.70);
     --bg:
-      radial-gradient(70% 45% at 100% 0%, rgba(255, 60, 140, 0.13), transparent 70%) fixed,
-      radial-gradient(55% 40% at 0% 100%, rgba(20, 200, 220, 0.09), transparent 70%) fixed,
-      linear-gradient(180deg, rgba(140, 60, 200, 0.08), transparent 35%) fixed,
+      radial-gradient(60% 55% at 100% 0%, rgba(255, 60, 140, 0.30), transparent 70%) fixed,
+      radial-gradient(55% 50% at 0% 100%, rgba(20, 200, 220, 0.20), transparent 70%) fixed,
+      radial-gradient(45% 35% at 15% 0%, rgba(140, 60, 200, 0.25), transparent 70%) fixed,
       #0e0e10;
   }
+}
+/* Éléments flottants : ils passent au-dessus du contenu, donc couleurs pleines pour rester lisibles */
+body.miami :is(.account-menu, [role="menu"], dialog, .toast, .to-top) { --surface: #ffffff; --surface-2: #f0f0f4; }
+@media (prefers-color-scheme: dark) {
+  body.miami :is(.account-menu, [role="menu"], dialog, .toast, .to-top) { --surface: #18181b; --surface-2: #1f1f23; }
 }
