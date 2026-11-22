@@ -294,6 +294,20 @@ li .head .open:hover { color: var(--accent-text); text-decoration: underline; }
 }
 /* En live : liseré rouge à gauche ; hors live : pastille grisée et nom atténué */
 #channels li.live { box-shadow: inset 3px 0 0 var(--live-bg); }
+/* Étiquette « miami » : coucher de soleil néon façon Floride années 80 */
+#channels li.miami {
+  --miami-a: rgba(255, 94, 148, 0.16); --miami-b: rgba(255, 166, 77, 0.12); --miami-c: rgba(38, 214, 230, 0.10);
+  background:
+    radial-gradient(ellipse 90px 60px at calc(100% - 70px) 115%, rgba(255, 140, 90, 0.35), transparent 70%),
+    linear-gradient(100deg, var(--miami-a), var(--miami-b) 55%, var(--miami-c));
+  box-shadow: inset 3px 0 0 #ff4fa0;
+}
+#channels li.miami.live { box-shadow: inset 3px 0 0 #ff4fa0, inset 0 -2px 0 rgba(38, 214, 230, 0.55); }
+#channels li.miami .tag.group { color: #e0287a; border-color: #ff7ab6; }
+@media (prefers-color-scheme: dark) {
+  #channels li.miami { --miami-a: rgba(255, 60, 140, 0.24); --miami-b: rgba(140, 60, 200, 0.18); --miami-c: rgba(20, 200, 220, 0.14); }
+  #channels li.miami .tag.group { color: #ff8cc6; border-color: #ff4fa0; }
+}
 #channels li.idle .avatar { filter: grayscale(1); opacity: .45; }
 #channels li.idle .head .open { color: var(--muted); font-weight: 500; }
 li .live-line, li .last, li .last-live { font-size: 12.5px; font-weight: 400; color: var(--muted); }

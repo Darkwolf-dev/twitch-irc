@@ -658,7 +658,8 @@ function renderChannel(channel) {
   }), el("span"));
 
   const classes = [channel.enabled ? "on" : "off", channel.live ? "live" : "idle", channel.watched && "watched",
-    dialog.name === channel.name && "selected"];
+    dialog.name === channel.name && "selected",
+    channel.groups.some((g) => g.toLowerCase() === "miami") && "miami"];
   return el("li", {
     class: classes.filter(Boolean).join(" "),
     onclick: (e) => {
