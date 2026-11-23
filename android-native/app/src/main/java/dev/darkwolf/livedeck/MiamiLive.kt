@@ -81,7 +81,7 @@ object MiamiLive {
             c.optString("drop").takeIf { it.isNotEmpty() && it != "null" }?.let { drop ->
                 runCatching { Instant.parse(drop).plusSeconds(30 * 60) }.getOrNull()
                     ?.takeIf { it.isAfter(Instant.now()) }
-                    ?.let { parts += "⏱ pas de drop avant ${clock.format(it)}" }
+                    ?.let { parts += "⏱ attente → ${clock.format(it)}" }
             }
             c.optInt("b").takeIf { it > 0 }?.let { parts += "🎁 $it" }
             "${c.optString("d")}  ${parts.joinToString(" · ")}"
