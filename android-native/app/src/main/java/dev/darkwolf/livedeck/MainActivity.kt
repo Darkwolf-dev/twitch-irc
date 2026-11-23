@@ -15,9 +15,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -448,7 +445,7 @@ fun HomeScreen(vm: DeckViewModel) {
                                 )
                             }
                             items(shown, key = { it.name }) { c ->
-                                SwipeRow(c, vm, Modifier.animateItem()) { ChannelRow(c, status.miamiMode, vm, vm.drops[c.name]) { selected = c.name } }
+                                Box(Modifier.animateItem()) { ChannelRow(c, status.miamiMode, vm, vm.drops[c.name]) { selected = c.name } }
                             }
                         }
                     }
@@ -597,43 +594,6 @@ fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, drop: DropStat
             haptic.performHapticFeedback(if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
             vm.setJoined(c, it)
         }, enabled = !vm.busy)
-    }
-}
-
-/** Balayer une ligne vers la droite active le chat de la chaîne, vers la gauche le coupe. */
-@Composable
-fun SwipeRow(c: Channel, vm: DeckViewModel, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val haptic = LocalHapticFeedback.current
-    val state = rememberSwipeToDismissBoxState(confirmValueChange = { value ->
-        when (value) {
-            SwipeToDismissBoxValue.StartToEnd -> if (!c.enabled && !vm.busy) {
-                haptic.performHapticFeedback(HapticFeedbackType.ToggleOn); vm.setJoined(c, true)
-            }
-            SwipeToDismissBoxValue.EndToStart -> if (c.enabled && !vm.busy) {
-                haptic.performHapticFeedback(HapticFeedbackType.ToggleOff); vm.setJoined(c, false)
-            }
-            else -> Unit
-        }
-        false // la ligne revient toujours à sa place
-    })
-    SwipeToDismissBox(
-        state = state,
-        modifier = modifier,
-        enableDismissFromStartToEnd = !c.enabled,
-        enableDismissFromEndToStart = c.enabled,
-        backgroundContent = {
-            val toRight = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            if (state.dismissDirection != SwipeToDismissBoxValue.Settled) {
-                Box(
-                    Modifier.fillMaxSize().background(if (toRight) Color(0xFF16A34A) else Color(0xFF6B6B76)).padding(horizontal = 20.dp),
-                    contentAlignment = if (toRight) Alignment.CenterStart else Alignment.CenterEnd,
-                ) {
-                    Text(if (toRight) "Activer le chat" else "Couper le chat", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
-        },
-    ) {
-        Box(Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = if (vm.status?.miamiMode == true) .88f else 1f))) { content() }
     }
 }
 
