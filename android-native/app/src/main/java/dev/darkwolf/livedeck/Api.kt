@@ -84,6 +84,8 @@ data class DeckStatus(
     val joinedCount: Int,
     val maxConcurrent: Int,
     val groups: List<String>,
+    val appVersionCode: Int?,
+    val appVersionName: String?,
 )
 
 data class ChatMessage(val id: Long, val user: String, val color: String?, val text: String, val action: Boolean, val at: Long)
@@ -155,6 +157,8 @@ fun parseStatus(j: JSONObject): DeckStatus {
         ircPaused = j.optJSONObject("irc")?.optBoolean("paused") == true,
         joinedCount = j.optJSONObject("counts")?.optInt("joined") ?: 0,
         maxConcurrent = j.optJSONObject("limits")?.optInt("concurrent") ?: 0,
+        appVersionCode = j.optJSONObject("app")?.optInt("versionCode"),
+        appVersionName = j.optJSONObject("app")?.optString("versionName"),
         groups = j.optJSONArray("groups")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it).getString("name") } } ?: emptyList(),
     )
 }

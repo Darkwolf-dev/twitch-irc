@@ -256,6 +256,26 @@ fun HomeScreen(vm: DeckViewModel) {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 }
+                // Nouvelle version de l'appli disponible sur le serveur
+                val newer = status?.appVersionCode?.takeIf { it > BuildConfig.VERSION_CODE }
+                var dismissed by rememberSaveable { mutableStateOf(0) }
+                if (newer != null && dismissed != newer) {
+                    val scope = rememberCoroutineScope()
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary).padding(start = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Nouvelle version ${status.appVersionName}", color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { dismissed = newer }) { Text("Plus tard", color = MaterialTheme.colorScheme.onPrimary) }
+                        TextButton(onClick = {
+                            scope.launch {
+                                // Téléchargement par le navigateur, qui propose ensuite d'installer l'APK
+                                vm.updateLink()?.let { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
+                            }
+                        }) { Text("Installer", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                    }
+                }
                 PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh(showSpinner = true) }, modifier = Modifier.fillMaxSize()) {
                     if (status == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -91,6 +91,14 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun stats(name: String): ChannelStats? = runCatching { parseStats(api.call("/channels/$name/stats")) }.getOrNull()
 
+    /** Lien de téléchargement signé (10 min) de la dernière version de l'appli. */
+    suspend fun updateLink(): String? = try {
+        BuildConfig.PANEL_URL + api.call("/app/download-link", JSONObject()).getString("url")
+    } catch (e: Exception) {
+        error = e.message
+        null
+    }
+
     fun markInboxSeen() {
         val ids = status?.inbox?.filter { !it.seen }?.map { it.id }.orEmpty()
         if (ids.isNotEmpty()) action("/inbox/seen", JSONObject().put("ids", JSONArray(ids)))
