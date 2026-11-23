@@ -41,5 +41,19 @@
         </service>
         <receiver android:name=".SeenReceiver" android:exported="false" />
         <receiver android:name=".InstallReceiver" android:exported="false" />
+
+        <!-- Widgets de l'écran d'accueil -->
+        <receiver android:name=".MiamiWidgetReceiver" android:exported="true" android:label="Miami">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_miami" />
+        </receiver>
+        <receiver android:name=".MiamiCompactReceiver" android:exported="true" android:label="Miami compact">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_compact" />
+        </receiver>
     </application>
 </manifest>

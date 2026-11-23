@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Liseré néon en haut du widget -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <gradient android:angle="0" android:startColor="#FF4FA0" android:centerColor="#FF8A3D" android:endColor="#26D6E6" />
+</shape>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_miami_desc">Tes chaînes miami : statut, chat et drops</string>
+    <string name="widget_compact_desc">Tes chaînes miami en un coup d\'œil</string>
+</resources>

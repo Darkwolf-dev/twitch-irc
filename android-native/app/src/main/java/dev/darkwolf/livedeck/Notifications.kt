@@ -44,6 +44,7 @@ class DeckApplication : Application() {
                     .build(),
             )
         }
+        WidgetWorker.schedule(this)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Alertes", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -110,6 +111,8 @@ class DeckMessagingService : FirebaseMessagingService() {
             builder.addAction(0, "Vu", seen)
         }
         runCatching { NotificationManagerCompat.from(this).notify(notificationId, builder.build()) }
+        // Une alerte (souvent un début de live) : les widgets se mettent à jour tout de suite
+        runBlocking { refreshWidgets(this@DeckMessagingService) }
     }
 
     private fun downloadBitmap(url: String): Bitmap? = runCatching {

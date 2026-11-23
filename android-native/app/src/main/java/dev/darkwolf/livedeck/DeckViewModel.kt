@@ -82,6 +82,7 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
             api.call(path, body)
             status = parseStatus(api.call("/status"))
             error = null
+            refreshWidgets(getApplication())
         } catch (e: Exception) {
             error = e.message ?: "Action impossible"
         } finally {

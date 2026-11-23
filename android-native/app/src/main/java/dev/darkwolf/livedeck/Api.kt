@@ -68,6 +68,7 @@ data class Channel(
     val sanction: String?,      // "ban" ou "timeout"
     val sanctionUntil: String?,
     val lastDrop: String?,      // heure du dernier drop vu sur la chaîne
+    val lastLive: String?,      // fin du dernier live connu
 ) {
     val banned get() = sanction == "ban"
     val miami get() = groups.any { it.equals("miami", ignoreCase = true) }
@@ -164,6 +165,7 @@ fun parseStatus(j: JSONObject): DeckStatus {
                 sanction = c.optJSONObject("sanction")?.str("type"),
                 sanctionUntil = c.optJSONObject("sanction")?.str("until"),
                 lastDrop = c.str("lastDrop"),
+                lastLive = c.str("lastLive"),
             )
         }
     } ?: emptyList()
