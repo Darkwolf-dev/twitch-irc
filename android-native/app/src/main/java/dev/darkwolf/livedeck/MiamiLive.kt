@@ -77,11 +77,11 @@ object MiamiLive {
         val lines = (0 until list.length()).map { i ->
             val c = list.getJSONObject(i)
             val parts = mutableListOf("${formatViewers(c.optInt("v"))} · ${since(c.optString("s"))}")
-            // Heure du prochain drop possible (30 min après le dernier) : reste juste entre deux mises à jour
+            // Fin de l'attente de 30 min après un drop : aucun drop possible avant cette heure (après, rien n'est garanti)
             c.optString("drop").takeIf { it.isNotEmpty() && it != "null" }?.let { drop ->
                 runCatching { Instant.parse(drop).plusSeconds(30 * 60) }.getOrNull()
                     ?.takeIf { it.isAfter(Instant.now()) }
-                    ?.let { parts += "⏱ drop vers ${clock.format(it)}" }
+                    ?.let { parts += "⏱ pas de drop avant ${clock.format(it)}" }
             }
             c.optInt("b").takeIf { it > 0 }?.let { parts += "🎁 $it" }
             "${c.optString("d")}  ${parts.joinToString(" · ")}"
