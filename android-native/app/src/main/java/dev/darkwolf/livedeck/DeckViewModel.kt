@@ -82,6 +82,15 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
     fun setCard(c: Channel, rarity: String, owned: Boolean) = action("/channels/card", one(c.name).put("rarity", rarity).put("owned", owned))
     fun setWatched(c: Channel, watched: Boolean) = action("/channels/watched", one(c.name).put("watched", watched))
 
+    fun setGroup(c: Channel, group: String, member: Boolean) =
+        action("/channels/group", one(c.name).put("group", group).put("member", member))
+
+    /** Messages du chat reçus après l'identifiant donné (0 : les 100 derniers). */
+    suspend fun messages(name: String, after: Long): List<ChatMessage> =
+        runCatching { parseMessages(api.call("/channels/$name/messages?after=$after")) }.getOrDefault(emptyList())
+
+    suspend fun stats(name: String): ChannelStats? = runCatching { parseStats(api.call("/channels/$name/stats")) }.getOrNull()
+
     fun markInboxSeen() {
         val ids = status?.inbox?.filter { !it.seen }?.map { it.id }.orEmpty()
         if (ids.isNotEmpty()) action("/inbox/seen", JSONObject().put("ids", JSONArray(ids)))

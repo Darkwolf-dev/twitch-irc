@@ -51,7 +51,7 @@ class Api(private val prefs: SharedPreferences) {
 
 // --- Données du panneau ---
 
-data class Live(val title: String, val game: String, val viewers: Int, val startedAt: String?)
+data class Live(val title: String, val game: String, val viewers: Int, val startedAt: String?, val thumbnail: String?)
 
 data class Channel(
     val name: String,
@@ -64,9 +64,12 @@ data class Channel(
     val enabled: Boolean,
     val state: String,
     val watched: Boolean,
+    val lastMessageAge: Int?,
+    val banned: Boolean,
 ) {
     val miami get() = groups.any { it.equals("miami", ignoreCase = true) }
     val noCard get() = cards.isEmpty()
+    val todo get() = live != null && !watched && !banned
     val joined get() = state == "joined" || state == "joining"
 }
 
@@ -77,8 +80,38 @@ data class DeckStatus(
     val miamiMode: Boolean,
     val inbox: List<InboxItem>,
     val ircConnected: Boolean,
+    val ircPaused: Boolean,
     val joinedCount: Int,
+    val maxConcurrent: Int,
+    val groups: List<String>,
 )
+
+data class ChatMessage(val id: Long, val user: String, val color: String?, val text: String, val action: Boolean, val at: Long)
+
+data class ChannelStats(val liveHours: Double, val sessions: Int, val peak: Int?, val avg: Int?, val messagesPerMinute: Double?, val lives: List<StatSession>)
+data class StatSession(val start: String, val hours: Double, val peak: Int)
+
+fun parseMessages(j: JSONObject): List<ChatMessage> = j.optJSONArray("messages")?.let { arr ->
+    (0 until arr.length()).map { i ->
+        val m = arr.getJSONObject(i)
+        ChatMessage(m.getLong("id"), m.optString("user"), m.str("color"), m.optString("text"), m.optBoolean("action"), m.optLong("at"))
+    }
+} ?: emptyList()
+
+fun parseStats(j: JSONObject): ChannelStats {
+    val s = j.optJSONObject("summary") ?: JSONObject()
+    val lives = j.optJSONArray("sessions")?.let { arr ->
+        (0 until arr.length()).map { i -> arr.getJSONObject(i).let { StatSession(it.optString("start"), it.optDouble("hours"), it.optInt("peak")) } }
+    } ?: emptyList()
+    return ChannelStats(
+        liveHours = s.optDouble("liveHours", 0.0),
+        sessions = s.optInt("sessions"),
+        peak = if (s.isNull("peakViewers")) null else s.optInt("peakViewers"),
+        avg = if (s.isNull("avgViewers")) null else s.optInt("avgViewers"),
+        messagesPerMinute = if (s.isNull("messagesPerMinute")) null else s.optDouble("messagesPerMinute"),
+        lives = lives.reversed(),
+    )
+}
 
 private fun JSONArray?.strings(): List<String> =
     if (this == null) emptyList() else (0 until length()).map { getString(it) }
@@ -90,7 +123,7 @@ fun parseStatus(j: JSONObject): DeckStatus {
         (0 until arr.length()).map { i ->
             val c = arr.getJSONObject(i)
             val live = c.optJSONObject("live")?.let { l ->
-                Live(l.optString("title"), l.optString("game"), l.optInt("viewers"), l.str("startedAt"))
+                Live(l.optString("title"), l.optString("game"), l.optInt("viewers"), l.str("startedAt"), l.str("thumbnail"))
             }
             Channel(
                 name = c.getString("name"),
@@ -103,6 +136,8 @@ fun parseStatus(j: JSONObject): DeckStatus {
                 enabled = c.optBoolean("enabled"),
                 state = c.optString("state"),
                 watched = c.optBoolean("watched"),
+                lastMessageAge = c.optJSONObject("lastMessage")?.optInt("ageSeconds"),
+                banned = c.optJSONObject("sanction")?.optString("type") == "ban",
             )
         }
     } ?: emptyList()
@@ -117,6 +152,9 @@ fun parseStatus(j: JSONObject): DeckStatus {
         miamiMode = j.optJSONObject("settings")?.optBoolean("miamiMode") == true,
         inbox = inbox,
         ircConnected = j.optJSONObject("irc")?.optBoolean("connected") == true,
+        ircPaused = j.optJSONObject("irc")?.optBoolean("paused") == true,
         joinedCount = j.optJSONObject("counts")?.optInt("joined") ?: 0,
+        maxConcurrent = j.optJSONObject("limits")?.optInt("concurrent") ?: 0,
+        groups = j.optJSONArray("groups")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it).getString("name") } } ?: emptyList(),
     )
 }

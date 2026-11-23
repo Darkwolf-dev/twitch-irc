@@ -47,10 +47,10 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 
-private val TwitchPurple = Color(0xFF9146FF)
-private val MiamiPink = Color(0xFFFF4FA0)
-private val MiamiCyan = Color(0xFF26D6E6)
-private val LiveRed = Color(0xFFE91916)
+val TwitchPurple = Color(0xFF9146FF)
+val MiamiPink = Color(0xFFFF4FA0)
+val MiamiCyan = Color(0xFF26D6E6)
+val LiveRed = Color(0xFFE91916)
 
 class MainActivity : ComponentActivity() {
     private val vm: DeckViewModel by viewModels()
@@ -129,7 +129,22 @@ fun PairScreen(vm: DeckViewModel) {
 
 // --- Liste des chaînes ---
 
-enum class Filter(val label: String) { Watch("À suivre"), Live("En live"), Favorites("Favoris"), All("Toutes") }
+/** Vues de la liste, comme dans la colonne de gauche du panneau (« group:nom » pour un groupe). */
+fun viewLabel(view: String) = when (view) {
+    "watch" -> "À suivre"
+    "todo" -> "À farmer"
+    "live" -> "En live"
+    "fav" -> "Favoris"
+    "no-card" -> "Sans carte"
+    "no-epic" -> "Sans épique"
+    "no-legendary" -> "Sans légendaire"
+    "done" -> "Finies"
+    "all" -> "Toutes"
+    else -> view.removePrefix("group:")
+}
+val baseViews = listOf("watch", "todo", "live", "fav", "no-card", "no-epic", "no-legendary", "done", "all")
+
+enum class Sort(val label: String) { Status("Statut"), Viewers("Spectateurs"), Name("Nom"), Activity("Activité du chat") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,94 +159,168 @@ fun HomeScreen(vm: DeckViewModel) {
             }
         }
     }
+    val context = LocalContext.current
     val status = vm.status
-    var filter by rememberSaveable { mutableStateOf(Filter.Watch) }
-    var selected by remember { mutableStateOf<String?>(null) }
+    val miami = status?.miamiMode == true
+    var view by rememberSaveable { mutableStateOf("watch") }
+    var sort by rememberSaveable { mutableStateOf(Sort.Status) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var showInbox by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Twitch Deck", fontWeight = FontWeight.Bold)
-                        status?.let {
-                            Text(
-                                if (it.ircConnected) "● ${it.joinedCount} chats" else "IRC déconnecté",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (it.ircConnected) Color(0xFF22C55E) else MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    val unseen = status?.inbox?.count { !it.seen } ?: 0
-                    BadgedBox(badge = { if (unseen > 0) Badge { Text(if (unseen > 9) "9+" else "$unseen") } }) {
-                        IconButton(onClick = { showInbox = true; vm.markInboxSeen() }) { Text("🔔", fontSize = 20.sp) }
-                    }
-                    val miami = status?.miamiMode == true
-                    IconButton(
-                        onClick = { vm.setMiami(!miami) },
-                        enabled = status != null && !vm.busy,
-                        modifier = if (miami) Modifier.border(2.dp, MiamiPink, CircleShape) else Modifier,
-                    ) { Text("🌴", fontSize = 20.sp, color = if (miami) Color.Unspecified else Color.Gray.copy(alpha = .5f)) }
-                },
-            )
-        },
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(Filter.entries) { f ->
-                    FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) })
+    val open = status?.channels?.find { it.name == selected }
+    if (open != null) {
+        ChannelScreen(open, vm, onBack = { selected = null })
+        return
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        if (miami) MiamiBackdrop()
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                Column {
+                    if (miami) Box(Modifier.statusBarsPadding()) { NeonLine() }
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        windowInsets = if (miami) WindowInsets(0) else TopAppBarDefaults.windowInsets,
+                        title = {
+                            Column {
+                                Text("Twitch Deck", fontWeight = FontWeight.Bold,
+                                    style = if (miami) LocalTextStyle.current.copy(brush = NeonTitleBrush) else LocalTextStyle.current)
+                                status?.let {
+                                    Text(
+                                        when {
+                                            it.ircPaused -> "⏸ IRC en pause"
+                                            it.ircConnected -> "● ${it.joinedCount} / ${it.maxConcurrent} chats"
+                                            else -> "IRC déconnecté"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (it.ircConnected && !it.ircPaused) Color(0xFF22C55E) else MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { searching = !searching; if (!searching) query = "" }) { Text("🔍", fontSize = 18.sp) }
+                            val unseen = status?.inbox?.count { !it.seen } ?: 0
+                            BadgedBox(badge = { if (unseen > 0) Badge { Text(if (unseen > 9) "9+" else "$unseen") } }) {
+                                IconButton(onClick = { showInbox = true; vm.markInboxSeen() }) { Text("🔔", fontSize = 18.sp) }
+                            }
+                            IconButton(
+                                onClick = { vm.setMiami(!miami) },
+                                enabled = status != null && !vm.busy,
+                                modifier = if (miami) Modifier.border(2.dp, MiamiPink, CircleShape) else Modifier,
+                            ) { Text("🌴", fontSize = 18.sp, color = if (miami) Color.Unspecified else Color.Gray.copy(alpha = .5f)) }
+                            IconButton(onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.PANEL_URL)))
+                            }) { Text("🌐", fontSize = 18.sp) }
+                        },
+                    )
                 }
-            }
-            vm.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            }
-            PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh(showSpinner = true) }, modifier = Modifier.fillMaxSize()) {
-                if (status == null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        if (vm.error == null) CircularProgressIndicator()
-                        else TextButton(onClick = { vm.unpair() }) { Text("Jumeler à nouveau") }
-                    }
-                } else {
-                    val shown = visibleChannels(status, filter)
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-                        if (shown.isEmpty()) item {
-                            Text(
-                                if (filter == Filter.Watch) "Aucune chaîne à suivre en live pour l'instant." else "Aucune chaîne ici.",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp),
-                            )
+            },
+        ) { padding ->
+            Column(Modifier.padding(padding).fillMaxSize()) {
+                if (searching) {
+                    OutlinedTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        placeholder = { Text("Chercher une chaîne") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LazyRow(
+                        Modifier.weight(1f),
+                        contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val views = baseViews + status?.groups.orEmpty().map { "group:$it" }
+                        items(views) { v ->
+                            val count = status?.let { st -> st.channels.count { inView(it, v, st.miamiMode) } }
+                            FilterChip(selected = view == v, onClick = { view = v },
+                                label = { Text(if (count != null) "${viewLabel(v)} $count" else viewLabel(v)) })
                         }
-                        items(shown, key = { it.name }) { c -> ChannelRow(c, status.miamiMode) { selected = c.name } }
+                    }
+                    Box {
+                        TextButton(onClick = { sortMenu = true }) { Text("↕ ${sort.label}", style = MaterialTheme.typography.labelMedium) }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            Sort.entries.forEach { s ->
+                                DropdownMenuItem(text = { Text(s.label) }, onClick = { sort = s; sortMenu = false })
+                            }
+                        }
+                    }
+                }
+                vm.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                }
+                PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh(showSpinner = true) }, modifier = Modifier.fillMaxSize()) {
+                    if (status == null) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (vm.error == null) CircularProgressIndicator()
+                            else TextButton(onClick = { vm.unpair() }) { Text("Jumeler à nouveau") }
+                        }
+                    } else {
+                        val shown = visibleChannels(status, view, sort, query)
+                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                            if (shown.isEmpty()) item {
+                                Text(
+                                    if (view == "watch") "Aucune chaîne à suivre en live pour l'instant." else "Aucune chaîne ici.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp),
+                                )
+                            }
+                            items(shown, key = { it.name }) { c -> ChannelRow(c, status.miamiMode, vm) { selected = c.name } }
+                        }
                     }
                 }
             }
         }
     }
 
-    status?.channels?.find { it.name == selected }?.let { c ->
-        ChannelSheet(c, vm, onDismiss = { selected = null })
-    }
     if (showInbox && status != null) InboxDialog(status.inbox, onOpen = { name -> showInbox = false; selected = name }) { showInbox = false }
 }
 
-fun visibleChannels(status: DeckStatus, filter: Filter): List<Channel> {
-    val list = when (filter) {
-        // Mode Miami : chaînes miami et sans carte en live ; sinon les favoris en live
-        Filter.Watch -> status.channels.filter { it.live != null && if (status.miamiMode) it.miami || it.noCard else it.favorite }
-        Filter.Live -> status.channels.filter { it.live != null }
-        Filter.Favorites -> status.channels.filter { it.favorite }
-        Filter.All -> status.channels
+fun inView(c: Channel, view: String, miamiMode: Boolean): Boolean = when (view) {
+    // Mode Miami : chaînes miami et sans carte en live ; sinon les favoris en live
+    "watch" -> c.live != null && if (miamiMode) c.miami || c.noCard else c.favorite
+    "todo" -> c.todo
+    "live" -> c.live != null
+    "fav" -> c.favorite
+    "no-card" -> c.noCard
+    "no-epic" -> "epic" !in c.cards
+    "no-legendary" -> "legendary" !in c.cards
+    "done" -> c.watched
+    "all" -> true
+    else -> c.groups.contains(view.removePrefix("group:"))
+}
+
+private fun statusRank(c: Channel) = when {
+    c.live != null -> if (c.watched) 2 else if (c.enabled) 0 else 1
+    c.joined -> 3
+    else -> 4
+}
+
+fun visibleChannels(status: DeckStatus, view: String, sort: Sort, query: String): List<Channel> {
+    val words = query.lowercase().split(Regex("[\\s,;]+")).filter { it.isNotBlank() }
+    val list = status.channels.filter { c ->
+        inView(c, view, status.miamiMode) && (words.isEmpty() || words.any { c.name.contains(it) })
     }
-    return list.sortedWith(
-        compareByDescending<Channel> { it.live != null }
-            .thenByDescending { status.miamiMode && it.miami && it.live != null }
-            .thenBy { it.watched }
+    val base: Comparator<Channel> = when {
+        // « À farmer » : le moins de cartes d'abord, puis les plus gros lives
+        view == "todo" -> compareBy<Channel> { it.cards.size }.thenByDescending { it.live?.viewers ?: -1 }
+        sort == Sort.Viewers -> compareBy<Channel> { it.watched }.thenByDescending { it.live?.viewers ?: -1 }
+        sort == Sort.Name -> compareBy { it.name }
+        sort == Sort.Activity -> compareBy { it.lastMessageAge ?: Int.MAX_VALUE }
+        else -> compareByDescending<Channel> { it.live != null }
+            .thenByDescending { it.favorite && !it.watched }
+            .thenBy { statusRank(it) }
             .thenByDescending { it.live?.viewers ?: -1 }
-            .thenBy { it.name },
-    )
+    }
+    // Mode Miami : les chaînes miami en live passent en tête, quel que soit le tri
+    val miamiFirst = compareByDescending<Channel> { status.miamiMode && it.miami && it.live != null }
+    return list.sortedWith(miamiFirst.then(base).thenBy { it.name })
 }
 
 @Composable
@@ -260,33 +349,72 @@ fun Tag(text: String, color: Color) {
 }
 
 @Composable
-fun ChannelRow(c: Channel, miamiMode: Boolean, onClick: () -> Unit) {
+fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, onClick: () -> Unit) {
     val rowBg = if (c.miami) Modifier.background(
         Brush.horizontalGradient(listOf(MiamiPink.copy(alpha = .14f), Color(0xFFFFA64D).copy(alpha = .10f), MiamiCyan.copy(alpha = .08f))),
     ) else Modifier
     Row(
-        rowBg.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp)
+        rowBg.fillMaxWidth().clickable(onClick = onClick).padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
             .alpha(if (c.watched) .55f else 1f),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Avatar(c, miamiMode)
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(c.displayName + if (c.favorite) " ★" else "", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
-                if (c.miami) Tag("miami", MiamiPink)
-                if (c.noCard) Tag("sans carte", MiamiCyan)
+                c.live?.let {
+                    Text("LIVE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(LiveRed).padding(horizontal = 5.dp, vertical = 1.dp))
+                    Text("${formatViewers(it.viewers)} · ${since(it.startedAt)}", color = LiveRed, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
             }
             Text(
                 c.live?.let { listOf(it.game, it.title).filter(String::isNotBlank).joinToString(" · ") } ?: "Hors ligne",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                RowState(c)
+                if (c.miami) Tag("miami", MiamiPink)
+                if (c.noCard) Tag("sans carte", MiamiCyan)
+            }
         }
-        c.live?.let {
-            Text(formatViewers(it.viewers), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+        // Cartes : pastilles É / L cliquables, comme sur le site
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CardPip("É", "epic" in c.cards, Color(0xFFA855F7), enabled = !vm.busy) { vm.setCard(c, "epic", "epic" !in c.cards) }
+            CardPip("L", "legendary" in c.cards, Color(0xFFF97316), enabled = !vm.busy) { vm.setCard(c, "legendary", "legendary" !in c.cards) }
         }
+        Switch(checked = c.enabled, onCheckedChange = { vm.setJoined(c, it) }, enabled = !vm.busy)
+    }
+}
+
+@Composable
+fun RowState(c: Channel) {
+    val (label, color) = when (c.state) {
+        "joined" -> "● connecté" to Color(0xFF22C55E)
+        "joining" -> "connexion…" to Color(0xFFF59E0B)
+        "full" -> "plafond atteint" to Color(0xFFF59E0B)
+        "offline" -> "si live" to MaterialTheme.colorScheme.onSurfaceVariant
+        "schedule" -> "hors plage" to MaterialTheme.colorScheme.onSurfaceVariant
+        "watched" -> "fini" to MaterialTheme.colorScheme.onSurfaceVariant
+        "retrying" -> "nouvel essai…" to MaterialTheme.colorScheme.error
+        else -> (if (c.enabled) "activé" else "désactivé") to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(label, color = color, fontSize = 11.sp, maxLines = 1)
+}
+
+@Composable
+fun CardPip(letter: String, owned: Boolean, color: Color, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+            .then(if (owned) Modifier.background(color) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(7.dp)))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(letter, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            color = if (owned) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -299,59 +427,6 @@ fun since(iso: String?): String {
         m < 60 -> "$m min"
         m < 1440 -> "${m / 60} h ${m % 60}"
         else -> "${m / 1440} j"
-    }
-}
-
-// --- Fiche d'une chaîne ---
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-fun ChannelSheet(c: Channel, vm: DeckViewModel, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Avatar(c, vm.status?.miamiMode == true, size = 56)
-                Column(Modifier.weight(1f)) {
-                    Text(c.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        c.live?.let { "🔴 ${formatViewers(it.viewers)} spectateurs · depuis ${since(it.startedAt)}" } ?: "Hors ligne",
-                        color = if (c.live != null) LiveRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-            c.live?.let {
-                if (it.title.isNotBlank()) Text(it.title, style = MaterialTheme.typography.bodyLarge)
-                if (it.game.isNotBlank()) Text("🎮 ${it.game}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Button(
-                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.twitch.tv/${c.name}"))) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Ouvrir sur Twitch") }
-
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = c.enabled, onClick = { vm.setJoined(c, !c.enabled) }, enabled = !vm.busy,
-                    label = { Text(if (c.enabled) "Chat rejoint" else "Rejoindre le chat") })
-                FilterChip(selected = c.favorite, onClick = { vm.setFavorite(c, !c.favorite) }, enabled = !vm.busy,
-                    label = { Text("★ Favori") })
-                FilterChip(selected = c.watched, onClick = { vm.setWatched(c, !c.watched) }, enabled = !vm.busy,
-                    label = { Text("Fini aujourd'hui") })
-            }
-            Text("Cartes", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("epic" to "Épique", "legendary" to "Légendaire").forEach { (rarity, label) ->
-                    val owned = rarity in c.cards
-                    FilterChip(selected = owned, onClick = { vm.setCard(c, rarity, !owned) }, enabled = !vm.busy,
-                        label = { Text(label) },
-                        border = if (owned) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline))
-                }
-            }
-            if (c.groups.isNotEmpty()) {
-                Text("Groupes : ${c.groups.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall)
-            }
-        }
     }
 }
 
