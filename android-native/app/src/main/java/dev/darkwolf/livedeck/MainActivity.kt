@@ -174,7 +174,7 @@ fun viewLabel(view: String) = when (view) {
     "all" -> "Toutes"
     else -> view.removePrefix("group:")
 }
-val baseViews = listOf("watch", "todo", "live", "fav", "no-card", "no-epic", "no-legendary", "done", "all")
+val baseViews = listOf("watch", "live", "fav", "no-card", "no-epic", "no-legendary", "done", "all")
 
 enum class Sort(val label: String) { Status("Statut"), Viewers("Spectateurs"), Name("Nom"), Activity("Activité du chat") }
 
@@ -272,7 +272,8 @@ fun HomeScreen(vm: DeckViewModel) {
                         contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        val views = baseViews + status?.groups.orEmpty().map { "group:$it" }
+                        // « À farmer » tout à la fin, après les groupes
+                        val views = baseViews + status?.groups.orEmpty().map { "group:$it" } + "todo"
                         items(views) { v ->
                             val count = status?.let { st -> st.channels.count { inView(it, v, st.miamiMode) } }
                             FilterChip(selected = view == v, onClick = { view = v },
