@@ -114,6 +114,28 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         null
     }
 
+    fun setRoute(kind: String, route: String) {
+        val routes = JSONObject()
+        status?.pushRoutes?.forEach { (k, v) -> routes.put(k, v) }
+        action("/settings", JSONObject().put("pushRoutes", routes.put(kind, route)))
+    }
+
+    fun setQuiet(q: QuietHours) = action(
+        "/settings",
+        JSONObject().put("quietHours", JSONObject().put("enabled", q.enabled).put("start", q.start).put("end", q.end).put("timeZone", q.timeZone)),
+    )
+
+    /** Notification de test vers l'appli. Renvoie le message à afficher. */
+    suspend fun testNotification(): String = try {
+        api.call("/app/fcm/test", JSONObject())
+        refresh()
+        "Notification envoyée : elle devrait arriver dans quelques secondes."
+    } catch (e: Exception) {
+        e.message ?: "Envoi impossible"
+    }
+
+    fun showError(message: String) { error = message }
+
     fun markInboxSeen() {
         val ids = status?.inbox?.filter { !it.seen }?.map { it.id }.orEmpty()
         if (ids.isNotEmpty()) action("/inbox/seen", JSONObject().put("ids", JSONArray(ids)))

@@ -1233,7 +1233,10 @@ app.post("/app/fcm", (req, res) => {
 // Notification de test vers les appareils de l'appli native
 app.post("/app/fcm/test", async (req, res) => {
   if (!nativePush.count()) return res.status(400).json({ error: "Aucun téléphone de l'appli native n'a activé les notifications" });
-  const sent = await nativePush.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront dans l'appli.", kind: "test", tag: "test" });
+  // Comme une vraie alerte : notée dans la cloche, avec son bouton « Vu »
+  const test = { title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront dans l'appli.", kind: "test", tag: `test-${Date.now()}` };
+  const inboxId = inbox.add(test);
+  const sent = await nativePush.send({ ...test, inboxId, unseen: inbox.items.filter((n) => !n.seenAt).length });
   if (!sent) return res.status(502).json({ error: "Firebase a refusé la notification" });
   res.json({ ok: true, sent });
 });

@@ -89,7 +89,13 @@ data class DeckStatus(
     val groups: List<String>,
     val appVersionCode: Int?,
     val appVersionName: String?,
+    /** Destination de chaque type d'alerte : live, chat, account → "discord" | "push" | "both" */
+    val pushRoutes: Map<String, String>,
+    val quiet: QuietHours,
+    val discordSet: Boolean,
 )
+
+data class QuietHours(val enabled: Boolean, val start: String, val end: String, val timeZone: String)
 
 /** Radar à drops : boosters vus par jour de présence dans le chat. */
 data class DropStat(val boosters: Int, val presenceDays: Int, val perDay: Double?, val score: Double)
@@ -175,6 +181,13 @@ fun parseStatus(j: JSONObject): DeckStatus {
         ircPaused = j.optJSONObject("irc")?.optBoolean("paused") == true,
         joinedCount = j.optJSONObject("counts")?.optInt("joined") ?: 0,
         maxConcurrent = j.optJSONObject("limits")?.optInt("concurrent") ?: 0,
+        pushRoutes = j.optJSONObject("settings")?.optJSONObject("pushRoutes")?.let { r ->
+            listOf("live", "chat", "account").associateWith { r.optString(it, "discord") }
+        } ?: emptyMap(),
+        quiet = j.optJSONObject("settings")?.optJSONObject("quietHours")?.let {
+            QuietHours(it.optBoolean("enabled"), it.optString("start", "01:00"), it.optString("end", "09:00"), it.optString("timeZone", "Europe/Paris"))
+        } ?: QuietHours(false, "01:00", "09:00", "Europe/Paris"),
+        discordSet = j.optJSONObject("settings")?.optBoolean("discordWebhookSet") == true,
         appVersionCode = j.optJSONObject("app")?.optInt("versionCode"),
         appVersionName = j.optJSONObject("app")?.optString("versionName"),
         groups = j.optJSONArray("groups")?.let { arr -> (0 until arr.length()).map { arr.getJSONObject(it).getString("name") } } ?: emptyList(),

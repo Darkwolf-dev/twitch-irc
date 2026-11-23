@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Mises à jour installées par l'appli elle-même -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Pour trouver l'appli du panneau installée depuis Chrome (WebAPK) qui ouvre ses adresses -->
     <queries>
@@ -38,5 +40,6 @@
             </intent-filter>
         </service>
         <receiver android:name=".SeenReceiver" android:exported="false" />
+        <receiver android:name=".InstallReceiver" android:exported="false" />
     </application>
 </manifest>

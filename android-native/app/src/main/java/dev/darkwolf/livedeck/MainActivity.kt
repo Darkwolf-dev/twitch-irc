@@ -202,10 +202,15 @@ fun HomeScreen(vm: DeckViewModel) {
     var sortMenu by remember { mutableStateOf(false) }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var showInbox by remember { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
 
     // Appui sur une notification : ouvrir la fiche de la chaîne
     LaunchedEffect(vm.pendingChannel) {
         vm.pendingChannel?.let { selected = it; vm.pendingChannel = null }
+    }
+    if (showSettings) {
+        NotificationsScreen(vm, onBack = { showSettings = false })
+        return
     }
     val open = status?.channels?.find { it.name == selected }
     if (open != null) {
@@ -252,6 +257,7 @@ fun HomeScreen(vm: DeckViewModel) {
                                 modifier = if (miami) Modifier.border(2.dp, MiamiPink, CircleShape) else Modifier,
                             ) { Text("🌴", fontSize = 18.sp, color = if (miami) Color.Unspecified else Color.Gray.copy(alpha = .5f)) }
                             IconButton(onClick = { openPanel(context) }) { Text("🌐", fontSize = 18.sp) }
+                            IconButton(onClick = { showSettings = true }) { Text("⚙", fontSize = 18.sp) }
                         },
                     )
                 }
@@ -297,19 +303,29 @@ fun HomeScreen(vm: DeckViewModel) {
                 var dismissed by rememberSaveable { mutableStateOf(0) }
                 if (newer != null && dismissed != newer) {
                     val scope = rememberCoroutineScope()
+                    var progress by remember { mutableStateOf<Int?>(null) }
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colorScheme.primary).padding(start = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Nouvelle version ${status.appVersionName}", color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { dismissed = newer }) { Text("Plus tard", color = MaterialTheme.colorScheme.onPrimary) }
-                        TextButton(onClick = {
-                            scope.launch {
-                                // Téléchargement par le navigateur, qui propose ensuite d'installer l'APK
-                                vm.updateLink()?.let { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
-                            }
-                        }) { Text("Installer", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                        Text(
+                            progress?.let { "Téléchargement… $it %" } ?: "Nouvelle version ${status.appVersionName}",
+                            color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.weight(1f),
+                        )
+                        if (progress == null) {
+                            TextButton(onClick = { dismissed = newer }) { Text("Plus tard", color = MaterialTheme.colorScheme.onPrimary) }
+                            TextButton(onClick = {
+                                // Téléchargée et installée par l'appli : rien dans Téléchargements
+                                if (Updater.ensureAllowed(context)) scope.launch {
+                                    progress = 0
+                                    val link = vm.updateLink()
+                                    val error = link?.let { Updater.downloadAndInstall(context, it) { p -> progress = p } }
+                                    progress = null
+                                    if (error != null) vm.showError(error)
+                                }
+                            }) { Text("Installer", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                        }
                     }
                 }
                 PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.refresh(showSpinner = true) }, modifier = Modifier.fillMaxSize()) {
