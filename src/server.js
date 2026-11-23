@@ -414,7 +414,15 @@ function publicSettings() {
 
 const push = new PushSender({ dataDir: DATA_DIR, log });
 const inbox = new Inbox({ dataDir: DATA_DIR, log });
-const appUpdater = new AppUpdater({ dataDir: DATA_DIR, repo: APP_REPO, token: GITHUB_TOKEN, secret: API_SECRET, log });
+const appUpdater = new AppUpdater({
+  dataDir: DATA_DIR, repo: APP_REPO, token: GITHUB_TOKEN, secret: API_SECRET, log,
+  // Nouvelle version : notification dans l'appli (un appui l'ouvre sur la bannière « Installer »)
+  onNewVersion: (latest) => nativePush.send({
+    title: `Nouvelle version ${latest.versionName} de Twitch Deck`,
+    body: (latest.notes || "Appuie pour l'installer.").slice(0, 200),
+    kind: "update", tag: "app-update", silent: true,
+  }).catch((err) => log.error(`[fcm] Notif de mise à jour : ${err.message}`)),
+});
 appUpdater.start();
 const appDevices = new AppDevices({ dataDir: DATA_DIR, log });
 const fcm = new FcmSender({ keyFile: path.join(DATA_DIR, "firebase-service-account.json"), log });
@@ -1256,14 +1264,15 @@ function miamiSnapshot() {
     .map((name) => {
       const info = live.info(name);
       return { n: name, d: info.displayName || name, v: info.viewers, s: info.startedAt,
-        drop: drops.recentDropOf(name)?.at ?? null, b: drops.boostersToday(name, watchDay) };
+        drop: drops.recentDropOf(name)?.at ?? null, b: drops.boostersToday(name, watchDay),
+        chat: irc.joined.has(name) }; // dans le chat ou non (sinon, les drops passent sans toi)
     })
     .sort((a, b) => b.v - a.v);
 }
 function pushMiamiLive(force = false) {
   if (!nativePush.count({ miamiLive: true })) return;
   const list = miamiSnapshot();
-  const key = JSON.stringify(list.map(({ n, drop, b }) => [n, drop, b]));
+  const key = JSON.stringify(list.map(({ n, drop, b, chat }) => [n, drop, b, chat]));
   const now = Date.now();
   const changed = key !== miamiSent.key;
   // Rien à montrer et rien de montré : inutile d'écrire au téléphone

@@ -12,7 +12,9 @@ const CHECK_EVERY_MS = 10 * 60_000; // une compilation dure ~5 min : la nouvelle
 const LINK_TTL_MS = 10 * 60_000;
 
 class AppUpdater {
-  constructor({ dataDir, repo, token, secret, log }) {
+  // onNewVersion(latest) : appelée quand une version plus récente vient d'être récupérée
+  constructor({ dataDir, repo, token, secret, log, onNewVersion = () => {} }) {
+    this.onNewVersion = onNewVersion;
     this.dir = path.join(dataDir, "app");
     this.infoFile = path.join(this.dir, "latest.json");
     this.repo = repo;
@@ -66,6 +68,7 @@ class AppUpdater {
         .filter((x) => x.apk)
         .sort((a, b) => b.code - a.code)[0];
       if (!release || (this.latest && this.latest.versionCode >= release.code)) return this.latest;
+      const hadVersion = Boolean(this.latest);
 
       // L'adresse de l'asset redirige vers un stockage signé : fetch n'y renvoie pas le jeton
       const res = await this.github(release.apk.url, "application/octet-stream");
@@ -85,6 +88,7 @@ class AppUpdater {
       };
       fs.writeFileSync(this.infoFile, JSON.stringify(this.latest, null, 2));
       this.log.log(`[appli] Nouvelle version de l'appli Android récupérée : ${this.latest.versionName} (${release.code})`);
+      if (hadVersion) this.onNewVersion(this.latest);
       return this.latest;
     } catch (err) {
       this.log.error(`[appli] Vérification des mises à jour impossible : ${err.message}`);
