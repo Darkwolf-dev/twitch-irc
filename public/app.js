@@ -416,7 +416,6 @@ function render() {
   }
   renderGroupTabs();
   renderInbox();
-  renderAppUpdate();
 
   const pill = $("irc");
   pill.hidden = false;
@@ -1967,39 +1966,6 @@ $("app-pair").addEventListener("click", async () => {
     pairTimer = setInterval(tick, 1000);
   } catch (err) {
     showError(err);
-  }
-});
-
-// --- Appli Android : proposer la nouvelle version quand le serveur en a une plus récente ---
-
-// Pont natif injecté par l'appli (Capacitor) ; absent dans un navigateur
-const nativeApp = window.Capacitor?.isNativePlatform?.() ? window.Capacitor : null;
-let nativeBuild = null;
-let appUpdateDismissed = null;
-nativeApp?.Plugins?.App?.getInfo().then((info) => { nativeBuild = Number(info.build) || 0; renderAppUpdate(); }).catch(() => {});
-
-function renderAppUpdate() {
-  const latest = lastStatus?.app;
-  const show = Boolean(nativeApp && nativeBuild !== null && latest && latest.versionCode > nativeBuild &&
-    appUpdateDismissed !== latest.versionCode);
-  $("app-update-banner").hidden = !show;
-  if (show) $("app-update-text").textContent = `Nouvelle version de l'appli : ${latest.versionName} (${(latest.size / 1e6).toFixed(1)} Mo)`;
-}
-$("app-update-later").addEventListener("click", () => {
-  appUpdateDismissed = lastStatus?.app?.versionCode ?? null;
-  renderAppUpdate();
-});
-$("app-update-install").addEventListener("click", async () => {
-  const button = $("app-update-install");
-  button.disabled = true;
-  try {
-    const { url } = await api("/app/download-link", {});
-    // Téléchargement dans le navigateur du téléphone : il propose ensuite d'installer l'APK
-    await nativeApp.Plugins.Browser.open({ url: new URL(url, location.origin).href });
-  } catch (err) {
-    showError(err);
-  } finally {
-    button.disabled = false;
   }
 });
 
