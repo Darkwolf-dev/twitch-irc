@@ -207,7 +207,7 @@ private fun ChannelLine(c: Channel, avatar: Bitmap?) {
                 }
                 val wait = minutesSince(c.lastDrop)?.let { 30 - it }
                 if (wait != null && wait > 0) {
-                    Text("  ⏱ drop $wait min", maxLines = 1, style = TextStyle(color = amberColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                    Text("  ⏱ attente $wait min", maxLines = 1, style = TextStyle(color = amberColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 }
             }
         }
