@@ -250,9 +250,7 @@ fun HomeScreen(vm: DeckViewModel) {
                                 enabled = status != null && !vm.busy,
                                 modifier = if (miami) Modifier.border(2.dp, MiamiPink, CircleShape) else Modifier,
                             ) { Text("🌴", fontSize = 18.sp, color = if (miami) Color.Unspecified else Color.Gray.copy(alpha = .5f)) }
-                            IconButton(onClick = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.PANEL_URL)))
-                            }) { Text("🌐", fontSize = 18.sp) }
+                            IconButton(onClick = { openPanel(context) }) { Text("🌐", fontSize = 18.sp) }
                         },
                     )
                 }
@@ -337,6 +335,15 @@ fun HomeScreen(vm: DeckViewModel) {
     }
 
     if (showInbox && status != null) InboxDialog(status.inbox, onOpen = { name -> showInbox = false; selected = name }) { showInbox = false }
+}
+
+/** Ouvre le panneau complet : dans l'appli installée depuis Chrome (WebAPK) si elle existe, sinon dans le navigateur. */
+fun openPanel(context: android.content.Context) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.PANEL_URL)).addCategory(Intent.CATEGORY_BROWSABLE)
+    val webApk = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        .firstOrNull { it.activityInfo.packageName.startsWith("org.chromium.webapk.") }
+    webApk?.let { intent.setClassName(it.activityInfo.packageName, it.activityInfo.name) }
+    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 fun inView(c: Channel, view: String, miamiMode: Boolean): Boolean = when (view) {
