@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fond de l'icône de l'appli native : dégradé rose néon → violet, pour la distinguer du panneau installé depuis Chrome (violet uni) -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient
-        android:angle="315"
-        android:startColor="#FF4FA0"
-        android:centerColor="#B13DD6"
-        android:endColor="#6A2BE0"
-        android:type="linear" />
-</shape>
+<!-- Fond de l'icône « Néon deck » de l'appli native : nuit violette -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108"
+                android:startColor="#FF2D0F4A" android:endColor="#FF0D0A1F" />
+        </aapt:attr>
+    </path>
+</vector>

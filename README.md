@@ -47,7 +47,7 @@ npm start
   - plafond de chats simultanés ;
   - **plage horaire** : en dehors, les chaînes « si live » ne sont pas rejointes ;
   - Discord : mentions, et alerte quand un favori passe en live, avec ou sans @.
-- **Appli mobile** : le panneau s'installe sur l'écran d'accueil (manifeste et service worker sans cache). Les icônes se régénèrent avec `node scripts/make-icons.js`.
+- **Appli mobile** : le panneau s'installe sur l'écran d'accueil (manifeste et service worker sans cache). Les icônes sont dessinées dans `public/icons/icon.svg` et `icon-maskable.svg`, puis converties en PNG (192, 512, maskable 512, apple-touch 180).
 
 Fichiers dans `data/` : `channels.json`, `settings.json`, `stats.json`, `drops.json`, `token.json`, `sessions.json`, `backups/` et `journal/`.
 

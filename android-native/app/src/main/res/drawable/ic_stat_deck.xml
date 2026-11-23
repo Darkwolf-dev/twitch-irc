@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Petite icône de la barre de notifications (blanche, Android la colore) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M51,25h26a8,8 0 0 1 8,8v18a8,8 0 0 1 -8,8"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M34,42h36a10,10 0 0 1 10,10v26a10,10 0 0 1 -10,10h-36a10,10 0 0 1 -10,-10v-26a10,10 0 0 1 10,-10zM44,53L44,77L63,65Z"
+        android:fillColor="#FFFFFFFF" android:fillType="evenOdd" />
+</vector>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Version monochrome pour les icônes à thème d'Android 13+ -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M51,33h18a6,6 0 0 1 6,6v12a6,6 0 0 1 -6,6h-18a6,6 0 0 1 -6,-6v-12a6,6 0 0 1 6,-6z"
+        android:strokeColor="#80FFFFFF" android:strokeWidth="3" android:strokeLineJoin="round" />
+    <path android:pathData="M45,40h18a6,6 0 0 1 6,6v12a6,6 0 0 1 -6,6h-18a6,6 0 0 1 -6,-6v-12a6,6 0 0 1 6,-6z"
+        android:strokeColor="#B3FFFFFF" android:strokeWidth="3" android:strokeLineJoin="round" />
+    <path android:pathData="M39,47h20a7,7 0 0 1 7,7v13a7,7 0 0 1 -7,7h-20a7,7 0 0 1 -7,-7v-13a7,7 0 0 1 7,-7zM45,54.5L45,66.5L55,60.5Z"
+        android:fillColor="#FFFFFFFF" android:fillType="evenOdd" />
+</vector>
