@@ -55,6 +55,27 @@ object MiamiLive {
 
     fun cancel(context: Context) = NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
 
+    /** Diagnostic de la mise en avant (Android 16) : autorisée par Android ? notif affichée et promue ? */
+    fun promotionStatus(context: Context): String {
+        if (android.os.Build.VERSION.SDK_INT < 36) return "Mise en avant indisponible : il faut Android 16."
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val allowed = manager.canPostPromotedNotifications()
+        val shown = manager.activeNotifications.firstOrNull { it.id == NOTIFICATION_ID }
+        val promoted = shown?.notification?.let { it.flags and android.app.Notification.FLAG_PROMOTED_ONGOING != 0 }
+        val promotable = shown?.notification?.hasPromotableCharacteristics()
+        return buildString {
+            appendLine(if (allowed) "✓ Mises à jour en direct autorisées pour l'appli" else "✗ Mises à jour en direct refusées : active-les ci-dessous")
+            append(
+                when {
+                    shown == null -> "Notif pas affichée en ce moment (aucune chaîne miami en live, ou mode Miami coupé)"
+                    promoted == true -> "✓ Notif affichée et mise en avant"
+                    promotable == false -> "✗ Notif affichée mais refusée par Android pour la mise en avant"
+                    else -> "Notif affichée, pas (encore) mise en avant"
+                },
+            )
+        }
+    }
+
     /** Message « miami » du serveur : liste des chaînes miami en live (JSON). */
     fun update(context: Context, channelsJson: String) {
         deckPrefs(context).edit().putString("miamiLiveLast", channelsJson).apply()

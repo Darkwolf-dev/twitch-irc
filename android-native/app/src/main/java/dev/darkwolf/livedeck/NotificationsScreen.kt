@@ -77,6 +77,19 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
                 }
                 Switch(checked = miamiLive, onCheckedChange = { miamiLive = it; MiamiLive.setEnabled(context, it) })
             }
+            if (miamiLive) {
+                // Pour rester affichée en entier sur l'écran de verrouillage, Android doit la « mettre en avant »
+                var promotion by remember { mutableStateOf(MiamiLive.promotionStatus(context)) }
+                Text(promotion, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (Build.VERSION.SDK_INT >= 36) OutlinedButton(onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                        )
+                    }) { Text("Réglage Android") }
+                    TextButton(onClick = { promotion = MiamiLive.promotionStatus(context) }) { Text("Revérifier") }
+                }
+            }
 
             HorizontalDivider()
 
