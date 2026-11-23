@@ -91,10 +91,13 @@ class AppDevices {
   }
 
   // Identifiant Firebase de l'appareil (notifications de l'appli native)
-  setFcmToken(id, fcmToken) {
+  // miamiLive : l'appli sait afficher la notif « Miami en direct » et l'a activée
+  // (les anciennes versions ne l'envoient pas : elles afficheraient une notification vide)
+  setFcmToken(id, fcmToken, miamiLive = false) {
     const device = this.devices.find((d) => d.id === id);
-    if (!device || device.fcmToken === fcmToken) return;
+    if (!device || (device.fcmToken === fcmToken && device.miamiLive === miamiLive)) return;
     device.fcmToken = fcmToken;
+    device.miamiLive = miamiLive;
     this.save();
   }
 
@@ -106,8 +109,8 @@ class AppDevices {
     this.log.log(`[fcm] Appli désinstallée ou notifications coupées : ${device.label}`);
   }
 
-  fcmTokens() {
-    return this.devices.filter((d) => d.fcmToken).map((d) => d.fcmToken);
+  fcmTokens({ miamiLive = false } = {}) {
+    return this.devices.filter((d) => d.fcmToken && (!miamiLive || d.miamiLive)).map((d) => d.fcmToken);
   }
 
   remove(id) {

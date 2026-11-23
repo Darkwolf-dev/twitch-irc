@@ -420,9 +420,9 @@ const appDevices = new AppDevices({ dataDir: DATA_DIR, log });
 const fcm = new FcmSender({ keyFile: path.join(DATA_DIR, "firebase-service-account.json"), log });
 // Notifications de l'appli native : vers chaque téléphone jumelé qui a donné son identifiant Firebase
 const nativePush = {
-  count: () => (fcm.enabled ? appDevices.fcmTokens().length : 0),
-  async send(data) {
-    const results = await Promise.all(appDevices.fcmTokens().map(async (t) => [t, await fcm.send(t, data)]));
+  count: (opts) => (fcm.enabled ? appDevices.fcmTokens(opts).length : 0),
+  async send(data, opts) {
+    const results = await Promise.all(appDevices.fcmTokens(opts).map(async (t) => [t, await fcm.send(t, data)]));
     for (const [t, r] of results) if (r === "gone") appDevices.clearFcmToken(t);
     return results.filter(([, r]) => r === "ok").length;
   },
@@ -1229,7 +1229,7 @@ app.post("/app/fcm", (req, res) => {
   if (!req.appDevice) return res.status(403).json({ error: "Réservé à l'appli Android" });
   const token = String(req.body?.token ?? "");
   if (!/^[\w:-]{20,4096}$/.test(token)) return res.status(400).json({ error: "Identifiant Firebase invalide" });
-  appDevices.setFcmToken(req.appDevice.id, token);
+  appDevices.setFcmToken(req.appDevice.id, token, req.body?.miamiLive === true);
   res.json({ ok: true });
 });
 
@@ -1261,7 +1261,7 @@ function miamiSnapshot() {
     .sort((a, b) => b.v - a.v);
 }
 function pushMiamiLive(force = false) {
-  if (!nativePush.count()) return;
+  if (!nativePush.count({ miamiLive: true })) return;
   const list = miamiSnapshot();
   const key = JSON.stringify(list.map(({ n, drop, b }) => [n, drop, b]));
   const now = Date.now();
@@ -1270,7 +1270,7 @@ function pushMiamiLive(force = false) {
   if (!list.length && miamiSent.key === "[]") return;
   if (!force && !changed && now - miamiSent.at < 5 * 60_000) return;
   miamiSent = { key, at: now };
-  nativePush.send({ type: "miami", channels: JSON.stringify(list), sentAt: new Date(now).toISOString() })
+  nativePush.send({ type: "miami", channels: JSON.stringify(list), sentAt: new Date(now).toISOString() }, { miamiLive: true })
     .catch((err) => log.error(`[fcm] Notif Miami : ${err.message}`));
 }
 setInterval(() => pushMiamiLive(), 5 * 60_000).unref();
