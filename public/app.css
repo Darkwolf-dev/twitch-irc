@@ -942,3 +942,6 @@ body.miami::before {
 .inbox-badge { background: var(--live-bg); }
 .inbox-list li.seen .inbox-item { opacity: .6; }
 .inbox-list li.seen .inbox-item:hover { opacity: 1; }
+/* Code de jumelage de l'appli Android */
+.pair-code { margin: 10px 0 4px; font-size: 15px; }
+.pair-code strong { font: 700 26px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .12em; }

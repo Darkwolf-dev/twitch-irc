@@ -16,6 +16,7 @@ const { MentionNotifier, isWebhookUrl, isDiscordUserId, formatDuration } = requi
 const { PushSender } = require("./push");
 const { Inbox } = require("./inbox");
 const { AppUpdater } = require("./appupdate");
+const { AppDevices } = require("./devices");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
 const { AvatarStore } = require("./avatars");
@@ -403,6 +404,7 @@ function publicSettings() {
     pushRoutes: settings.pushRoutes,
     pushKey: push.publicKey,
     pushDevices: push.list(),
+    appDevices: appDevices.list(),
     schedule: settings.schedule,
     scheduleOpen: scheduleOpen(),
   };
@@ -412,6 +414,7 @@ const push = new PushSender({ dataDir: DATA_DIR, log });
 const inbox = new Inbox({ dataDir: DATA_DIR, log });
 const appUpdater = new AppUpdater({ dataDir: DATA_DIR, repo: APP_REPO, token: GITHUB_TOKEN, secret: API_SECRET, log });
 appUpdater.start();
+const appDevices = new AppDevices({ dataDir: DATA_DIR, log });
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
@@ -849,12 +852,37 @@ app.get("/app/download/:token", (req, res) => {
   res.download(appUpdater.apkPath(), `twitch-deck-${appUpdater.latest.versionName}.apk`);
 });
 
+// --- Appli Android native : jumelage avec un code affiché dans le panneau (hors session) ---
+
+app.post("/app/pair", express.json({ limit: "2kb" }), (req, res) => {
+  if (isBlocked(req, res)) return;
+  const result = appDevices.pair(req.body?.code, req.body?.label);
+  if (result.error) {
+    recordFailure(req);
+    return res.status(400).json({ error: result.error });
+  }
+  notifier.securityAlert("Appli Android jumelée", `Appareil **${result.device.label}**
+IP **${whereFrom(req)}**`);
+  res.json({ token: result.token, device: result.device });
+});
+
 // --- Authentification de l'API : secret (Bearer) ou session Twitch (cookie) ---
 
 app.use((req, res, next) => {
   if (isBlocked(req, res)) return;
 
   const authorization = req.get("authorization");
+  // Clé d'un appareil de l'appli Android
+  if (appDevices.isAppToken(authorization)) {
+    const device = appDevices.authenticate(authorization);
+    if (!device) {
+      recordFailure(req);
+      return res.status(401).json({ error: "Appareil non reconnu : jumelle-le à nouveau depuis le panneau" });
+    }
+    req.user = `appli:${device.label}`;
+    req.appDevice = device;
+    return next();
+  }
   if (authorization && crypto.timingSafeEqual(sha256(authorization), expectedAuth)) {
     if (!settings.allowSecretLogin && !isLocalRequest(req)) {
       return res.status(401).json({ error: "Connexion par secret désactivée : connecte-toi avec Twitch" });
@@ -1172,6 +1200,19 @@ app.post("/push/test", async (req, res) => {
   const sent = await push.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront ici.", tag: "test" });
   if (!sent) return res.status(502).json({ error: "Aucun appareil n'a accepté la notification" });
   res.json({ ok: true, sent });
+});
+
+// --- Appli Android native : codes de jumelage et appareils ---
+
+app.post("/app/pair/code", (req, res) => {
+  if (req.appDevice) return res.status(403).json({ error: "Génère le code depuis le panneau, pas depuis l'appli" });
+  res.json(appDevices.newCode(req.user));
+});
+
+app.post("/app/devices/remove", (req, res) => {
+  if (!appDevices.remove(String(req.body?.id ?? ""))) return res.status(404).json({ error: "Appareil inconnu" });
+  log.log(`[appli] Appareil retiré par ${req.user}`);
+  res.json({ ok: true, devices: appDevices.list() });
 });
 
 // --- Appli Android : version disponible et lien de téléchargement ---

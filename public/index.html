@@ -358,6 +358,13 @@
             <div class="bulk"><button type="button" id="revoke-others" class="ghost">Déconnecter tous les autres appareils</button></div>
           </div>
           <div class="card">
+            <h3>Appli Android</h3>
+            <p class="hint">Pour connecter l'appli Android, génère un code ici puis tape-le dans l'appli. Il est valable 5 minutes et ne sert qu'une fois.</p>
+            <div class="bulk"><button type="button" id="app-pair">Associer un téléphone</button></div>
+            <p id="app-pair-code" class="pair-code" hidden></p>
+            <ul id="app-device-list" class="session-list"></ul>
+          </div>
+          <div class="card">
             <h3>Connexion par secret</h3>
             <label class="check"><input id="allow-secret" type="checkbox"> Autoriser la connexion avec le secret de l'API</label>
             <p class="hint">Décoche une fois la connexion Twitch en place : le secret ne servira plus qu'en dépannage depuis le serveur.</p>

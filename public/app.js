@@ -1112,6 +1112,7 @@ function renderSettings() {
     $("quiet-end").value = s.quietHours.end;
   }
   renderPush();
+  renderAppDevices();
   const sc = lastStatus.sanctions;
   $("sanctions-count").textContent = sc.active ? `⚠ ${sc.active}` : "";
   $("sanctions-count").title = sc.active ? `${sc.active} sanction(s) en cours` : "";
@@ -1929,6 +1930,44 @@ async function loadMe() {
     $("account").hidden = true;
   }
 }
+
+// --- Appli Android native : jumelage par code et appareils connectés ---
+
+let pairTimer = null;
+function renderAppDevices() {
+  const devices = lastStatus.settings.appDevices ?? [];
+  $("app-device-list").replaceChildren(...(devices.length ? devices.map((d) => el("li", {},
+    el("span", {}, `📱 ${d.label}`, el("span", { class: "hint" },
+      ` · jumelé le ${new Date(d.createdAt).toLocaleDateString("fr-FR")}`,
+      d.lastSeenAt ? ` · vu ${formatAge(Math.max(0, Math.round((Date.now() - Date.parse(d.lastSeenAt)) / 1000)))}` : "")),
+    el("button", {
+      type: "button", class: "ghost small",
+      onclick: async () => {
+        try {
+          await api("/app/devices/remove", { id: d.id });
+          await refresh();
+        } catch (err) { showError(err); }
+      },
+    }, "Retirer"))) : [el("li", { class: "hint" }, "Aucun téléphone jumelé.")]));
+}
+$("app-pair").addEventListener("click", async () => {
+  try {
+    const { code, expiresAt } = await api("/app/pair/code", {});
+    const box = $("app-pair-code");
+    box.hidden = false;
+    clearInterval(pairTimer);
+    const tick = () => {
+      const left = Math.max(0, Math.round((Date.parse(expiresAt) - Date.now()) / 1000));
+      box.replaceChildren(el("strong", {}, code), el("span", { class: "hint" },
+        left ? ` · expire dans ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : " · expiré, génère-en un autre"));
+      if (!left) clearInterval(pairTimer);
+    };
+    tick();
+    pairTimer = setInterval(tick, 1000);
+  } catch (err) {
+    showError(err);
+  }
+});
 
 // --- Appli Android : proposer la nouvelle version quand le serveur en a une plus récente ---
 
