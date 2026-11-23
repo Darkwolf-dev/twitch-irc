@@ -14,9 +14,11 @@ on:
 permissions:
   contents: write
 
+# Une nouvelle modif arrête la compilation en cours : seule la dernière version est compilée
+# (une publication interrompue n'a pas d'APK, le serveur l'ignore)
 concurrency:
   group: android
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
