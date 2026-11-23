@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const CHECK_EVERY_MS = 30 * 60_000;
+const CHECK_EVERY_MS = 10 * 60_000; // une compilation dure ~5 min : la nouvelle version arrive vite dans l'appli
 const LINK_TTL_MS = 10 * 60_000;
 
 class AppUpdater {
