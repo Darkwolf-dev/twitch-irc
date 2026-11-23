@@ -15,6 +15,7 @@ const { SessionStore, readCookie, cookieHeader, COOKIE, SESSION_TTL_MS } = requi
 const { MentionNotifier, isWebhookUrl, isDiscordUserId, formatDuration } = require("./discord");
 const { PushSender } = require("./push");
 const { Inbox } = require("./inbox");
+const { AppUpdater } = require("./appupdate");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
 const { AvatarStore } = require("./avatars");
@@ -32,6 +33,8 @@ const {
   TWITCH_CLIENT_ID,
   TWITCH_CLIENT_SECRET,
   TWITCH_OAUTH_TOKEN,
+  GITHUB_TOKEN,                         // jeton GitHub en lecture seule : APK de l'appli Android
+  APP_REPO = "Darkwolf-dev/twitch-irc", // dépôt où la compilation publie l'APK
 } = process.env;
 
 if (API_SECRET.length < 32) {
@@ -407,6 +410,8 @@ function publicSettings() {
 
 const push = new PushSender({ dataDir: DATA_DIR, log });
 const inbox = new Inbox({ dataDir: DATA_DIR, log });
+const appUpdater = new AppUpdater({ dataDir: DATA_DIR, repo: APP_REPO, token: GITHUB_TOKEN, secret: API_SECRET, log });
+appUpdater.start();
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
@@ -601,6 +606,7 @@ function fullStatus() {
   status.live = live.status();
   status.token = tokens.status();
   status.inbox = inbox.list();
+  status.app = appUpdater.latest && { versionCode: appUpdater.latest.versionCode, versionName: appUpdater.latest.versionName, size: appUpdater.latest.size };
 
   const sizes = new Map();
   for (const set of groups.values()) for (const g of set) sizes.set(g, (sizes.get(g) ?? 0) + 1);
@@ -828,6 +834,19 @@ app.post("/auth/logout", (req, res) => {
   sessions.destroy(readCookie(req, COOKIE));
   res.set("Set-Cookie", cookieHeader("", 0, secureCookie));
   res.json({ ok: true });
+});
+
+// --- Appli Android : téléchargement de l'APK par lien signé (ouvert dans le navigateur du téléphone,
+// donc sans la session du panneau) ---
+
+app.get("/app/download/:token", (req, res) => {
+  if (isBlocked(req, res)) return;
+  if (!appUpdater.latest || !appUpdater.validToken(req.params.token)) {
+    recordFailure(req);
+    return res.status(404).type("text").send("Lien expiré : relance la mise à jour depuis l'appli.");
+  }
+  res.set({ "Cache-Control": "no-store", "Content-Type": "application/vnd.android.package-archive" });
+  res.download(appUpdater.apkPath(), `twitch-deck-${appUpdater.latest.versionName}.apk`);
 });
 
 // --- Authentification de l'API : secret (Bearer) ou session Twitch (cookie) ---
@@ -1153,6 +1172,18 @@ app.post("/push/test", async (req, res) => {
   const sent = await push.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront ici.", tag: "test" });
   if (!sent) return res.status(502).json({ error: "Aucun appareil n'a accepté la notification" });
   res.json({ ok: true, sent });
+});
+
+// --- Appli Android : version disponible et lien de téléchargement ---
+
+app.post("/app/download-link", (req, res) => {
+  if (!appUpdater.latest) return res.status(404).json({ error: "Aucune version de l'appli disponible sur le serveur" });
+  res.json({ url: `/app/download/${appUpdater.downloadToken()}`, ...appUpdater.latest });
+});
+
+app.post("/app/check", async (req, res) => {
+  if (!appUpdater.enabled) return res.status(400).json({ error: "GITHUB_TOKEN non configuré sur le serveur" });
+  res.json({ ok: true, latest: await appUpdater.check() });
 });
 
 // --- Centre de notifications du panneau ---
