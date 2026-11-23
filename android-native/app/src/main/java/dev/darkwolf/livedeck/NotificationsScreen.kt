@@ -108,6 +108,13 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
                 }
             }
             vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+            HorizontalDivider()
+            // Version installée : utile pour vérifier qu'une mise à jour est bien passée
+            Text(
+                "Twitch Deck ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
