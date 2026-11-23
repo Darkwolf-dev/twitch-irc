@@ -136,6 +136,17 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
 
     fun showError(message: String) { error = message }
 
+    /** Demande au serveur de chercher tout de suite une nouvelle version sur GitHub. */
+    suspend fun checkUpdate(): String = try {
+        val latest = api.call("/app/check", JSONObject()).optJSONObject("latest")
+        refresh()
+        val code = latest?.optInt("versionCode") ?: 0
+        if (code > BuildConfig.VERSION_CODE) "Version ${latest?.optString("versionName")} disponible : utilise la bannière en haut de la liste."
+        else "Tu as la dernière version."
+    } catch (e: Exception) {
+        e.message ?: "Vérification impossible"
+    }
+
     fun markInboxSeen() {
         val ids = status?.inbox?.filter { !it.seen }?.map { it.id }.orEmpty()
         if (ids.isNotEmpty()) action("/inbox/seen", JSONObject().put("ids", JSONArray(ids)))

@@ -111,10 +111,18 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
 
             HorizontalDivider()
             // Version installée : utile pour vérifier qu'une mise à jour est bien passée
-            Text(
-                "Twitch Deck ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            var updateResult by remember { mutableStateOf<String?>(null) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Twitch Deck ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { scope.launch { updateResult = "Recherche…"; updateResult = vm.checkUpdate() } }) {
+                    Text("Rechercher une mise à jour")
+                }
+            }
+            updateResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
