@@ -25,6 +25,13 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var busy by mutableStateOf(false)
         private set
+    /** Chaîne à ouvrir (appui sur une notification). */
+    var pendingChannel by mutableStateOf<String?>(null)
+
+    /** Envoie l'identifiant Firebase de ce téléphone au serveur (notifications de l'appli). */
+    fun registerFcm(token: String) = viewModelScope.launch {
+        if (api.token != null) runCatching { api.call("/app/fcm", JSONObject().put("token", token)) }
+    }
 
     fun refresh(showSpinner: Boolean = false) = viewModelScope.launch {
         if (showSpinner) refreshing = true

@@ -1,7 +1,8 @@
 # Compile l'appli Android native (android-native/) signée à chaque modification, puis la publie en
 # Release « android-vN ». Le serveur du panneau récupère ensuite l'APK (jeton en lecture seule) et le
 # propose dans l'appli. Secrets du dépôt requis : ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-# CF_ACCESS_CLIENT_ID et CF_ACCESS_CLIENT_SECRET (jeton de service Cloudflare Access de l'appli).
+# CF_ACCESS_CLIENT_ID et CF_ACCESS_CLIENT_SECRET (jeton de service Cloudflare Access de l'appli),
+# GOOGLE_SERVICES_JSON (configuration Firebase des notifications, jamais commitée).
 name: Appli Android
 
 on:
@@ -46,6 +47,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
           APP_VERSION_NAME: 2.${{ github.run_number }}
         run: |
           chmod +x gradlew

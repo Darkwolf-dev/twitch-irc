@@ -1,6 +1,13 @@
 package dev.darkwolf.livedeck
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -55,10 +62,35 @@ val LiveRed = Color(0xFFE91916)
 class MainActivity : ComponentActivity() {
     private val vm: DeckViewModel by viewModels()
 
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { DeckApp(vm) }
+        handle(intent)
+        setContent {
+            DeckApp(vm)
+            // Une fois jumelé : autorisation des notifications (Android 13+) et identifiant Firebase
+            LaunchedEffect(vm.paired) { if (vm.paired) setUpNotifications() }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    private fun handle(intent: Intent?) {
+        intent?.getStringExtra(EXTRA_CHANNEL)?.let { vm.pendingChannel = it }
+    }
+
+    private fun setUpNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (FirebaseApp.getApps(this).isNotEmpty()) {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { vm.registerFcm(it) }
+        }
     }
 }
 
@@ -170,6 +202,10 @@ fun HomeScreen(vm: DeckViewModel) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var showInbox by remember { mutableStateOf(false) }
 
+    // Appui sur une notification : ouvrir la fiche de la chaîne
+    LaunchedEffect(vm.pendingChannel) {
+        vm.pendingChannel?.let { selected = it; vm.pendingChannel = null }
+    }
     val open = status?.channels?.find { it.name == selected }
     if (open != null) {
         ChannelScreen(open, vm, onBack = { selected = null })

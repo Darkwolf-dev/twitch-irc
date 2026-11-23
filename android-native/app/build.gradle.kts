@@ -14,6 +14,26 @@ val localProps = Properties().apply {
 }
 fun secret(key: String, env: String): String? = localProps.getProperty(key) ?: System.getenv(env)?.takeIf { it.isNotEmpty() }
 
+// Configuration Firebase (google-services.json) : jamais commitée. En local, chemin du fichier dans
+// keystore.properties (googleServicesFile) ; sur GitHub, contenu dans le secret GOOGLE_SERVICES_JSON.
+@Suppress("UNCHECKED_CAST")
+val firebase: Map<String, String> = run {
+    val text = localProps.getProperty("googleServicesFile")?.let { file(it).takeIf { f -> f.exists() }?.readText() }
+        ?: System.getenv("GOOGLE_SERVICES_JSON")?.takeIf { it.isNotBlank() }
+        ?: return@run emptyMap()
+    val json = groovy.json.JsonSlurper().parseText(text) as Map<String, Any?>
+    val project = json["project_info"] as Map<String, Any?>
+    val client = (json["client"] as List<Map<String, Any?>>).first { c ->
+        ((c["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == "dev.darkwolf.livedeck"
+    }
+    mapOf(
+        "appId" to (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"].toString(),
+        "apiKey" to ((client["api_key"] as List<Map<String, Any?>>).first()["current_key"]).toString(),
+        "projectId" to project["project_id"].toString(),
+        "senderId" to project["project_number"].toString(),
+    )
+}
+
 android {
     namespace = "dev.darkwolf.livedeck"
     compileSdk = 36
@@ -29,6 +49,8 @@ android {
         // Jeton de service Cloudflare Access : laisse l'appli passer la protection du panneau
         buildConfigField("String", "CF_ACCESS_ID", "\"${secret("cfAccessId", "CF_ACCESS_CLIENT_ID") ?: ""}\"")
         buildConfigField("String", "CF_ACCESS_SECRET", "\"${secret("cfAccessSecret", "CF_ACCESS_CLIENT_SECRET") ?: ""}\"")
+        listOf("appId" to "FIREBASE_APP_ID", "apiKey" to "FIREBASE_API_KEY", "projectId" to "FIREBASE_PROJECT_ID", "senderId" to "FIREBASE_SENDER_ID")
+            .forEach { (k, field) -> buildConfigField("String", field, "\"${firebase[k] ?: ""}\"") }
     }
 
     signingConfigs {
@@ -67,10 +89,15 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.core:core-ktx:1.17.0")
+    // Firebase tire une vieille version de fragment, incompatible avec les demandes d autorisation modernes
+    implementation("androidx.fragment:fragment-ktx:1.8.9")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt.coil3:coil-compose:3.2.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
+    implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }
