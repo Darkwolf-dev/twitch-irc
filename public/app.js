@@ -1051,8 +1051,22 @@ function renderChannelSettings(channel) {
 function renderGroupTabs() {
   const container = $("group-tabs");
   container.replaceChildren();
-  if (lastStatus.groups.length) container.append(el("p", { class: "v2-nav-title" }, "Groupes"));
-  for (const group of lastStatus.groups) {
+  // Mode Miami : le groupe miami devient la première vue (avant « Toutes ») et quitte la liste des groupes
+  const miamiGroup = lastStatus.settings.miamiMode === true
+    ? lastStatus.groups.find((g) => g.name.toLowerCase() === "miami") : null;
+  $("miami-view")?.remove();
+  if (miamiGroup) {
+    const active = view === `group:${miamiGroup.name}`;
+    document.querySelector('.v2-nav[data-view="all"]').before(el("button", {
+      type: "button", id: "miami-view",
+      class: `v2-nav miami-view${active ? " active" : ""}`,
+      "aria-pressed": String(active),
+      onclick: () => setView(active ? "all" : `group:${miamiGroup.name}`),
+    }, "🌴 Miami", el("span", { class: "n" }, String(miamiGroup.count))));
+  }
+  const groups = lastStatus.groups.filter((g) => g !== miamiGroup);
+  if (groups.length) container.append(el("p", { class: "v2-nav-title" }, "Groupes"));
+  for (const group of groups) {
     const active = view === `group:${group.name}`;
     container.append(el("button", {
       type: "button",
@@ -1061,7 +1075,7 @@ function renderGroupTabs() {
       onclick: () => setView(active ? "all" : `group:${group.name}`),
     }, group.name, el("span", { class: "n" }, String(group.count))));
   }
-  container.hidden = lastStatus.groups.length === 0;
+  container.hidden = groups.length === 0;
 }
 
 function setView(value) {

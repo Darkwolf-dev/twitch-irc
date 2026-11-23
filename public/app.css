@@ -952,3 +952,5 @@ body.miami::before {
   color: var(--ok); border: 1px solid currentColor;
 }
 .v2-today .v2-icon { width: 12px; height: 12px; stroke-width: 2; }
+/* Vue « 🌴 Miami » en tête des vues quand le mode Miami est actif */
+button.v2-nav.miami-view:not(.active) { color: var(--accent-text); font-weight: 700; }

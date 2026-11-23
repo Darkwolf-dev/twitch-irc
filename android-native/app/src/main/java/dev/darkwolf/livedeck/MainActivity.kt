@@ -173,7 +173,7 @@ fun viewLabel(view: String) = when (view) {
     "no-legendary" -> "Sans légendaire"
     "done" -> "Finies"
     "all" -> "Toutes"
-    else -> view.removePrefix("group:")
+    else -> view.removePrefix("group:").let { if (it.equals("miami", ignoreCase = true)) "🌴 Miami" else it }
 }
 val baseViews = listOf("watch", "live", "fav", "no-card", "no-epic", "no-legendary", "done", "all")
 
@@ -277,8 +277,11 @@ fun HomeScreen(vm: DeckViewModel) {
                         contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        // « À farmer » tout à la fin, après les groupes
-                        val views = baseViews + status?.groups.orEmpty().map { "group:$it" } + "todo"
+                        // Mode Miami : le groupe miami en premier ; « À farmer » tout à la fin, après les groupes
+                        val miamiGroup = status?.groups.orEmpty().find { it.equals("miami", ignoreCase = true) }
+                            ?.takeIf { status?.miamiMode == true }
+                        val views = listOfNotNull(miamiGroup?.let { "group:$it" }) + baseViews +
+                            status?.groups.orEmpty().filter { it != miamiGroup }.map { "group:$it" } + "todo"
                         items(views) { v ->
                             val count = status?.let { st -> st.channels.count { inView(it, v, st.miamiMode) } }
                             FilterChip(selected = view == v, onClick = { view = v },
