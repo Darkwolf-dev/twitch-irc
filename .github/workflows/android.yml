@@ -1,12 +1,13 @@
-# Compile l'appli Android signée à chaque modification de android-app/, puis la publie en Release
-# « android-vN ». Le serveur du panneau récupère ensuite l'APK (jeton en lecture seule) et le propose
-# dans l'appli. Secrets du dépôt requis : ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD.
+# Compile l'appli Android native (android-native/) signée à chaque modification, puis la publie en
+# Release « android-vN ». Le serveur du panneau récupère ensuite l'APK (jeton en lecture seule) et le
+# propose dans l'appli. Secrets du dépôt requis : ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+# CF_ACCESS_CLIENT_ID et CF_ACCESS_CLIENT_SECRET (jeton de service Cloudflare Access de l'appli).
 name: Appli Android
 
 on:
   push:
     branches: [main]
-    paths: ["android-app/**", ".github/workflows/android.yml"]
+    paths: ["android-native/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
@@ -30,40 +31,33 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Dépendances et synchronisation Capacitor
-        working-directory: android-app
-        run: |
-          npm ci
-          npx cap sync android
-
       - name: Clé de signature
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           test -n "$KEYSTORE_BASE64" || { echo "Secret ANDROID_KEYSTORE_BASE64 manquant"; exit 1; }
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/twitchdeck.jks"
+          test -n "${{ secrets.CF_ACCESS_CLIENT_ID }}" || { echo "Secrets CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET manquants"; exit 1; }
 
       - name: Compilation de l'APK signé
-        working-directory: android-app/android
+        working-directory: android-native
         env:
           ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/twitchdeck.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          APP_VERSION_NAME: 1.${{ github.run_number }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          APP_VERSION_NAME: 2.${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/twitch-deck-1.${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/twitch-deck-2.${{ github.run_number }}.apk"
 
       - name: Publication en Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "android-v${APP_VERSION_CODE}" "$RUNNER_TEMP/twitch-deck-1.${{ github.run_number }}.apk" \
-            --title "Appli Android 1.${{ github.run_number }}" \
+          gh release create "android-v${APP_VERSION_CODE}" "$RUNNER_TEMP/twitch-deck-2.${{ github.run_number }}.apk" \
+            --title "Appli Android 2.${{ github.run_number }}" \
             --notes "$(git log -1 --pretty=%s)" \
             --target "${{ github.sha }}"
 
