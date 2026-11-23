@@ -3,6 +3,7 @@ package dev.darkwolf.livedeck
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -111,18 +112,24 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
 
             HorizontalDivider()
             // Version installée : utile pour vérifier qu'une mise à jour est bien passée
-            var updateResult by remember { mutableStateOf<String?>(null) }
+            var checking by remember { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Twitch Deck ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { scope.launch { updateResult = "Recherche…"; updateResult = vm.checkUpdate() } }) {
-                    Text("Rechercher une mise à jour")
-                }
+                TextButton(enabled = !checking, onClick = {
+                    scope.launch {
+                        checking = true
+                        val (message, available) = vm.checkUpdate()
+                        checking = false
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        // Nouvelle version : retour à la liste, où la bannière propose l'installation
+                        if (available) onBack()
+                    }
+                }) { Text(if (checking) "Recherche…" else "Rechercher une mise à jour") }
             }
-            updateResult?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
