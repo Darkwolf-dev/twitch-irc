@@ -90,6 +90,26 @@ class AppDevices {
     return String(authorization ?? "").replace(/^Bearer\s+/i, "").startsWith(TOKEN_PREFIX);
   }
 
+  // Identifiant Firebase de l'appareil (notifications de l'appli native)
+  setFcmToken(id, fcmToken) {
+    const device = this.devices.find((d) => d.id === id);
+    if (!device || device.fcmToken === fcmToken) return;
+    device.fcmToken = fcmToken;
+    this.save();
+  }
+
+  clearFcmToken(fcmToken) {
+    const device = this.devices.find((d) => d.fcmToken === fcmToken);
+    if (!device) return;
+    delete device.fcmToken;
+    this.save();
+    this.log.log(`[fcm] Appli désinstallée ou notifications coupées : ${device.label}`);
+  }
+
+  fcmTokens() {
+    return this.devices.filter((d) => d.fcmToken).map((d) => d.fcmToken);
+  }
+
   remove(id) {
     const before = this.devices.length;
     this.devices = this.devices.filter((d) => d.id !== id);
@@ -98,8 +118,8 @@ class AppDevices {
     return true;
   }
 
-  publicDevice({ id, label, createdAt, lastSeenAt }) {
-    return { id, label, createdAt, lastSeenAt };
+  publicDevice({ id, label, createdAt, lastSeenAt, fcmToken }) {
+    return { id, label, createdAt, lastSeenAt, notifications: Boolean(fcmToken) };
   }
 
   list() {

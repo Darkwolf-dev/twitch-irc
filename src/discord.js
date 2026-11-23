@@ -25,7 +25,8 @@ function buildMatcher(keywords) {
 }
 
 class MentionNotifier {
-  constructor({ getSettings, getUsername, isQuiet = () => false, push = null, inbox = null, log }) {
+  constructor({ getSettings, getUsername, isQuiet = () => false, push = null, native = null, inbox = null, log }) {
+    this.native = native; // notifications de l'appli Android native (Firebase)
     this.inbox = inbox; // centre de notifications du panneau (src/inbox.js)
     this.getSettings = getSettings;
     this.getUsername = getUsername;
@@ -45,17 +46,20 @@ class MentionNotifier {
   canSend(kind) {
     const route = this.route(kind);
     return Boolean((route !== "push" && this.getSettings().discordWebhook) ||
-      (route !== "discord" && this.push?.devices.length));
+      (route !== "discord" && (this.push?.devices.length || this.native?.count())));
   }
 
   // Envoie sur Discord et/ou en push selon le réglage du type d'alerte
   deliver(kind, payload, mention, silent, notification) {
     const route = this.route(kind);
     const { discordWebhook } = this.getSettings();
-    this.inbox?.add({ kind, ...notification });
+    const inboxId = this.inbox?.add({ kind, ...notification });
     if (route !== "push" && discordWebhook) this.post(discordWebhook, payload, mention, silent);
+    const unseen = this.inbox ? this.inbox.items.filter((n) => !n.seenAt).length : undefined;
+    if (route !== "discord" && this.native?.count()) {
+      this.native.send({ ...notification, kind, inboxId, silent, unseen }).catch((err) => this.log.error(`[fcm] ${err.message}`));
+    }
     if (route !== "discord" && this.push) {
-      const unseen = this.inbox ? this.inbox.items.filter((n) => !n.seenAt).length : undefined;
       this.push.send({ ...notification, silent, unseen }).catch((err) => this.log.error(`[push] ${err.message}`));
     }
   }

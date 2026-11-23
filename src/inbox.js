@@ -34,9 +34,11 @@ class Inbox {
     }
   }
 
+  // Renvoie l'identifiant de l'alerte (bouton « Vu » de la notification)
   add({ kind, title, body, channel, icon }) {
+    const id = crypto.randomBytes(6).toString("hex");
     this.items.push({
-      id: crypto.randomBytes(6).toString("hex"),
+      id,
       kind,
       title: String(title ?? "").slice(0, 200),
       body: String(body ?? "").slice(0, 300),
@@ -46,6 +48,7 @@ class Inbox {
       seenAt: null,
     });
     this.prune();
+    return id;
   }
 
   // Vu (sur n'importe quel appareil). ids absent : tout ce qui est actuellement dans la boîte.

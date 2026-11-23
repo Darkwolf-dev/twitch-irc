@@ -1939,7 +1939,8 @@ function renderAppDevices() {
   $("app-device-list").replaceChildren(...(devices.length ? devices.map((d) => el("li", {},
     el("span", {}, `📱 ${d.label}`, el("span", { class: "hint" },
       ` · jumelé le ${new Date(d.createdAt).toLocaleDateString("fr-FR")}`,
-      d.lastSeenAt ? ` · vu ${formatAge(Math.max(0, Math.round((Date.now() - Date.parse(d.lastSeenAt)) / 1000)))}` : "")),
+      d.lastSeenAt ? ` · vu ${formatAge(Math.max(0, Math.round((Date.now() - Date.parse(d.lastSeenAt)) / 1000)))}` : "",
+      d.notifications ? " · 🔔 notifs actives" : " · notifs inactives")),
     el("button", {
       type: "button", class: "ghost small",
       onclick: async () => {

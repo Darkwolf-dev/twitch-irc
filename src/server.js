@@ -17,6 +17,7 @@ const { PushSender } = require("./push");
 const { Inbox } = require("./inbox");
 const { AppUpdater } = require("./appupdate");
 const { AppDevices } = require("./devices");
+const { FcmSender } = require("./fcm");
 const { StatsStore } = require("./stats");
 const { DormantTracker } = require("./dormant");
 const { AvatarStore } = require("./avatars");
@@ -415,11 +416,22 @@ const inbox = new Inbox({ dataDir: DATA_DIR, log });
 const appUpdater = new AppUpdater({ dataDir: DATA_DIR, repo: APP_REPO, token: GITHUB_TOKEN, secret: API_SECRET, log });
 appUpdater.start();
 const appDevices = new AppDevices({ dataDir: DATA_DIR, log });
+const fcm = new FcmSender({ keyFile: path.join(DATA_DIR, "firebase-service-account.json"), log });
+// Notifications de l'appli native : vers chaque téléphone jumelé qui a donné son identifiant Firebase
+const nativePush = {
+  count: () => (fcm.enabled ? appDevices.fcmTokens().length : 0),
+  async send(data) {
+    const results = await Promise.all(appDevices.fcmTokens().map(async (t) => [t, await fcm.send(t, data)]));
+    for (const [t, r] of results) if (r === "gone") appDevices.clearFcmToken(t);
+    return results.filter(([, r]) => r === "ok").length;
+  },
+};
 const notifier = new MentionNotifier({
   getSettings: () => settings,
   getUsername: () => irc.username,
   isQuiet: () => quietNow(),
   push,
+  native: nativePush,
   inbox,
   log,
 });
@@ -1207,6 +1219,23 @@ app.post("/push/test", async (req, res) => {
 app.post("/app/pair/code", (req, res) => {
   if (req.appDevice) return res.status(403).json({ error: "Génère le code depuis le panneau, pas depuis l'appli" });
   res.json(appDevices.newCode(req.user));
+});
+
+// { "token": "…" } : identifiant Firebase de l'appli qui fait l'appel (notifications natives)
+app.post("/app/fcm", (req, res) => {
+  if (!req.appDevice) return res.status(403).json({ error: "Réservé à l'appli Android" });
+  const token = String(req.body?.token ?? "");
+  if (!/^[\w:-]{20,4096}$/.test(token)) return res.status(400).json({ error: "Identifiant Firebase invalide" });
+  appDevices.setFcmToken(req.appDevice.id, token);
+  res.json({ ok: true });
+});
+
+// Notification de test vers les appareils de l'appli native
+app.post("/app/fcm/test", async (req, res) => {
+  if (!nativePush.count()) return res.status(400).json({ error: "Aucun téléphone de l'appli native n'a activé les notifications" });
+  const sent = await nativePush.send({ title: "Notifications activées ✅", body: "Les alertes de Twitch Deck arriveront dans l'appli.", kind: "test", tag: "test" });
+  if (!sent) return res.status(502).json({ error: "Firebase a refusé la notification" });
+  res.json({ ok: true, sent });
 });
 
 app.post("/app/devices/remove", (req, res) => {
