@@ -149,7 +149,7 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Déverrouiller avec l'empreinte", style = MaterialTheme.typography.titleMedium)
-                    Text("Demandée à l'ouverture et au retour dans l'appli après une minute. Les widgets et les notifications restent visibles.",
+                    Text("Demandée quand tu rouvres l'appli après le délai choisi. Les widgets et les notifications restent visibles.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = vm.biometricLock, onCheckedChange = { on ->
@@ -161,9 +161,23 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
                         BiometricManager.from(context).canAuthenticate(auth) != BiometricManager.BIOMETRIC_SUCCESS ->
                             Toast.makeText(context, "Aucune empreinte ni code de verrouillage configuré sur ce téléphone", Toast.LENGTH_LONG).show()
                         // Une première empreinte pour confirmer avant d'activer
-                        else -> activity?.authenticate { vm.changeBiometricLock(true) }
+                        else -> activity?.authenticate { vm.changeBiometricLock(true); vm.markActive() }
                     }
                 })
+            }
+            if (vm.biometricLock) {
+                Text("Pas d'empreinte si tu reviens dans l'appli dans les", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val delays = listOf(1 to "1 min", 5 to "5 min", 15 to "15 min", 60 to "1 h")
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    delays.forEachIndexed { i, (minutes, label) ->
+                        SegmentedButton(
+                            selected = vm.lockDelay == minutes,
+                            onClick = { vm.changeLockDelay(minutes) },
+                            shape = SegmentedButtonDefaults.itemShape(i, delays.size),
+                        ) { Text(label) }
+                    }
+                }
             }
 
             HorizontalDivider()

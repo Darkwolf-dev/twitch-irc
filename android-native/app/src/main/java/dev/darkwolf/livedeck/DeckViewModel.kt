@@ -35,8 +35,20 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var biometricLock by mutableStateOf(prefs.getBoolean("biometricLock", false))
         private set
+    /** Délai sans empreinte après la dernière utilisation (minutes). */
+    var lockDelay by mutableStateOf(prefs.getInt("lockDelayMin", 5))
+        private set
     /** Écran verrouillé en attendant l'empreinte. */
-    var locked by mutableStateOf(prefs.getBoolean("biometricLock", false))
+    var locked by mutableStateOf(lockNeeded())
+
+    /** Empreinte demandée si l'appli n'a pas été utilisée depuis plus que le délai choisi (gardé même si Android ferme l'appli). */
+    fun lockNeeded() = prefs.getBoolean("biometricLock", false) &&
+        System.currentTimeMillis() - prefs.getLong("lastActiveAt", 0) > prefs.getInt("lockDelayMin", 5) * 60_000L
+
+    /** Dernière utilisation : à la sortie de l'appli et au déverrouillage. */
+    fun markActive() = prefs.edit().putLong("lastActiveAt", System.currentTimeMillis()).apply()
+
+    fun changeLockDelay(minutes: Int) { lockDelay = minutes; prefs.edit().putInt("lockDelayMin", minutes).apply() }
 
     fun changeDynamicColors(on: Boolean) { dynamicColors = on; prefs.edit().putBoolean("dynamicColors", on).apply() }
     fun changeBiometricLock(on: Boolean) { biometricLock = on; prefs.edit().putBoolean("biometricLock", on).apply() }
@@ -70,9 +82,7 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
     var pendingView by mutableStateOf<String?>(null)
 
     /** Envoie l'identifiant Firebase de ce téléphone au serveur (notifications de l'appli). */
-    fun registerFcm(token: String) = viewModelScope.launch {
-        if (api.token != null) runCatching { api.call("/app/fcm", JSONObject().put("token", token)) }
-    }
+    fun registerFcm(token: String) = viewModelScope.launch { MiamiLive.register(getApplication(), token) }
 
     fun refresh(showSpinner: Boolean = false) = viewModelScope.launch {
         if (showSpinner) refreshing = true

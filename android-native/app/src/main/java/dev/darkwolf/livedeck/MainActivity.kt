@@ -94,17 +94,15 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private var stoppedAt = 0L
-
-    // Verrouillage par empreinte : à l'ouverture, et au retour après plus d'une minute ailleurs
+    // Verrouillage par empreinte : seulement si l'appli n'a pas servi depuis plus que le délai choisi
     override fun onStart() {
         super.onStart()
-        if (vm.biometricLock && stoppedAt != 0L && System.currentTimeMillis() - stoppedAt > 60_000) vm.locked = true
+        if (vm.lockNeeded()) vm.locked = true
     }
 
     override fun onStop() {
         super.onStop()
-        stoppedAt = System.currentTimeMillis()
+        if (!vm.locked) vm.markActive()
     }
 
     /** Demande l'empreinte (ou le code du téléphone). */
@@ -177,7 +175,7 @@ fun DeckApp(vm: DeckViewModel) {
 @Composable
 fun LockScreen(vm: DeckViewModel) {
     val activity = LocalContext.current as? MainActivity
-    val unlock = { activity?.authenticate { vm.locked = false } }
+    val unlock = { activity?.authenticate { vm.locked = false; vm.markActive() } }
     LaunchedEffect(Unit) { unlock() }
     Column(
         Modifier.fillMaxSize().systemBarsPadding().padding(24.dp),

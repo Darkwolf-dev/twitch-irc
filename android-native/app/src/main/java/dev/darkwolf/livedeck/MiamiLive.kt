@@ -8,7 +8,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -26,8 +30,19 @@ object MiamiLive {
 
     fun enabled(context: Context) = deckPrefs(context).getBoolean("miamiLive", true)
 
+    /** Donne au serveur l'identifiant Firebase du téléphone, et dit s'il veut la notif Miami en direct. */
+    suspend fun register(context: Context, fcmToken: String? = deckPrefs(context).getString("fcmToken", null)) {
+        fcmToken ?: return
+        deckPrefs(context).edit().putString("fcmToken", fcmToken).apply()
+        val api = Api(deckPrefs(context))
+        if (api.token == null) return
+        runCatching { api.call("/app/fcm", JSONObject().put("token", fcmToken).put("miamiLive", enabled(context))) }
+    }
+
     fun setEnabled(context: Context, on: Boolean) {
         deckPrefs(context).edit().putBoolean("miamiLive", on).apply()
+        // Le serveur arrête (ou reprend) l'envoi des mises à jour à ce téléphone
+        CoroutineScope(Dispatchers.IO).launch { register(context) }
         if (on) {
             // On réaffiche la dernière liste reçue, s'il y en a une
             deckPrefs(context).getString("miamiLiveLast", null)?.let { show(context, it) }

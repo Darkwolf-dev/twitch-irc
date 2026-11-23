@@ -66,8 +66,7 @@ fun deckPrefs(context: Context) = context.getSharedPreferences("deck", Context.M
 class DeckMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         // Nouvel identifiant Firebase : le serveur doit le connaître pour nous écrire
-        val api = Api(deckPrefs(this))
-        if (api.token != null) runBlocking { runCatching { api.call("/app/fcm", JSONObject().put("token", token)) } }
+        runBlocking { MiamiLive.register(this@DeckMessagingService, token) }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
