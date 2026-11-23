@@ -2,7 +2,9 @@ package dev.darkwolf.livedeck
 
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
+import androidx.biometric.BiometricManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
@@ -38,7 +40,7 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 navigationIcon = { IconButton(onClick = onBack) { Text("←", style = MaterialTheme.typography.titleLarge) } },
-                title = { Text("Notifications", fontWeight = FontWeight.Bold) },
+                title = { Text("Réglages", fontWeight = FontWeight.Bold) },
             )
         },
     ) { padding ->
@@ -109,6 +111,44 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
                 }
             }
             vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+            HorizontalDivider()
+
+            // Apparence
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Couleurs du fond d'écran", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (Build.VERSION.SDK_INT >= 31) "Hors mode Miami, l'appli reprend les couleurs de ton fond d'écran."
+                        else "Nécessite Android 12 ou plus récent.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = vm.dynamicColors, onCheckedChange = { vm.changeDynamicColors(it) }, enabled = Build.VERSION.SDK_INT >= 31)
+            }
+
+            HorizontalDivider()
+
+            // Sécurité
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Déverrouiller avec l'empreinte", style = MaterialTheme.typography.titleMedium)
+                    Text("Demandée à l'ouverture et au retour dans l'appli après une minute. Les widgets et les notifications restent visibles.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = vm.biometricLock, onCheckedChange = { on ->
+                    val activity = context as? MainActivity
+                    val auth = if (Build.VERSION.SDK_INT >= 30) BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    else BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    when {
+                        !on -> activity?.authenticate { vm.changeBiometricLock(false) }
+                        BiometricManager.from(context).canAuthenticate(auth) != BiometricManager.BIOMETRIC_SUCCESS ->
+                            Toast.makeText(context, "Aucune empreinte ni code de verrouillage configuré sur ce téléphone", Toast.LENGTH_LONG).show()
+                        // Une première empreinte pour confirmer avant d'activer
+                        else -> activity?.authenticate { vm.changeBiometricLock(true) }
+                    }
+                })
+            }
 
             HorizontalDivider()
             // Version installée : utile pour vérifier qu'une mise à jour est bien passée

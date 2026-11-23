@@ -5,6 +5,24 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.fragment.app.FragmentActivity
 import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
@@ -60,7 +78,7 @@ val MiamiPink = Color(0xFFFF4FA0)
 val MiamiCyan = Color(0xFF26D6E6)
 val LiveRed = Color(0xFFE91916)
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val vm: DeckViewModel by viewModels()
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -74,6 +92,34 @@ class MainActivity : ComponentActivity() {
             // Une fois jumelé : autorisation des notifications (Android 13+) et identifiant Firebase
             LaunchedEffect(vm.paired) { if (vm.paired) setUpNotifications() }
         }
+    }
+
+    private var stoppedAt = 0L
+
+    // Verrouillage par empreinte : à l'ouverture, et au retour après plus d'une minute ailleurs
+    override fun onStart() {
+        super.onStart()
+        if (vm.biometricLock && stoppedAt != 0L && System.currentTimeMillis() - stoppedAt > 60_000) vm.locked = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stoppedAt = System.currentTimeMillis()
+    }
+
+    /** Demande l'empreinte (ou le code du téléphone). */
+    fun authenticate(onSuccess: () -> Unit) {
+        val authenticators = if (Build.VERSION.SDK_INT >= 30) BIOMETRIC_STRONG or DEVICE_CREDENTIAL else BIOMETRIC_WEAK or DEVICE_CREDENTIAL
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onSuccess()
+        })
+        prompt.authenticate(
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Twitch Deck")
+                .setSubtitle("Déverrouille pour accéder à tes chaînes")
+                .setAllowedAuthenticators(authenticators)
+                .build(),
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -96,10 +142,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DeckTheme(miami: Boolean, content: @Composable () -> Unit) {
+fun DeckTheme(miami: Boolean, dynamic: Boolean = false, content: @Composable () -> Unit) {
     val accent = if (miami) MiamiPink else TwitchPurple
     val dark = isSystemInDarkTheme()
-    val scheme = if (dark) {
+    val context = LocalContext.current
+    val scheme = if (dynamic && !miami && Build.VERSION.SDK_INT >= 31) {
+        // Couleurs tirées du fond d'écran (Material You), seulement hors mode Miami
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else if (dark) {
         darkColorScheme(primary = accent, secondary = MiamiCyan, background = Color(0xFF0E0E10), surface = Color(0xFF18181B),
             surfaceContainer = Color(0xFF1F1F23), onPrimary = Color.White)
     } else {
@@ -110,10 +160,32 @@ fun DeckTheme(miami: Boolean, content: @Composable () -> Unit) {
 
 @Composable
 fun DeckApp(vm: DeckViewModel) {
-    DeckTheme(miami = vm.status?.miamiMode == true) {
+    DeckTheme(miami = vm.status?.miamiMode == true, dynamic = vm.dynamicColors) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            if (!vm.paired) PairScreen(vm) else HomeScreen(vm)
+            when {
+                !vm.paired -> PairScreen(vm)
+                vm.biometricLock && vm.locked -> LockScreen(vm)
+                else -> HomeScreen(vm)
+            }
         }
+    }
+}
+
+// --- Verrouillage par empreinte ---
+
+@Composable
+fun LockScreen(vm: DeckViewModel) {
+    val activity = LocalContext.current as? MainActivity
+    val unlock = { activity?.authenticate { vm.locked = false } }
+    LaunchedEffect(Unit) { unlock() }
+    Column(
+        Modifier.fillMaxSize().systemBarsPadding().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("🔒", fontSize = 48.sp)
+        Text("Twitch Deck est verrouillé", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Button(onClick = { unlock() }) { Text("Déverrouiller") }
     }
 }
 
@@ -208,17 +280,28 @@ fun HomeScreen(vm: DeckViewModel) {
     LaunchedEffect(vm.pendingChannel) {
         vm.pendingChannel?.let { selected = it; vm.pendingChannel = null }
     }
-    if (showSettings) {
-        NotificationsScreen(vm, onBack = { showSettings = false })
-        return
-    }
     val open = status?.channels?.find { it.name == selected }
-    if (open != null) {
-        ChannelScreen(open, vm, onBack = { selected = null })
-        return
+    // Fiche gardée pendant l'animation de sortie
+    var lastOpen by remember { mutableStateOf<Channel?>(null) }
+    if (open != null) lastOpen = open
+    val screen = when {
+        showSettings -> "settings"
+        open != null -> "channel"
+        else -> "home"
     }
+    val haptic = LocalHapticFeedback.current
 
-    Box(Modifier.fillMaxSize()) {
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            if (targetState == "home") (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+            else (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it / 4 } + fadeOut())
+        },
+        label = "écran",
+    ) { target ->
+    if (target == "settings") NotificationsScreen(vm, onBack = { showSettings = false })
+    else if (target == "channel") lastOpen?.let { ChannelScreen(it, vm, onBack = { selected = null }) }
+    else Box(Modifier.fillMaxSize()) {
         if (miami) MiamiBackdrop()
         Scaffold(
             containerColor = Color.Transparent,
@@ -252,7 +335,7 @@ fun HomeScreen(vm: DeckViewModel) {
                                 IconButton(onClick = { showInbox = true; vm.markInboxSeen() }) { Text("🔔", fontSize = 18.sp) }
                             }
                             IconButton(
-                                onClick = { vm.setMiami(!miami) },
+                                onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.setMiami(!miami) },
                                 enabled = status != null && !vm.busy,
                                 modifier = if (miami) Modifier.border(2.dp, MiamiPink, CircleShape) else Modifier,
                             ) { Text("🌴", fontSize = 18.sp, color = if (miami) Color.Unspecified else Color.Gray.copy(alpha = .5f)) }
@@ -301,6 +384,17 @@ fun HomeScreen(vm: DeckViewModel) {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 }
+                // Liste gardée en mémoire : serveur injoignable, ou réponse pas encore arrivée
+                if (status != null && (vm.offline || System.currentTimeMillis() - vm.updatedAt > 60_000)) {
+                    val age = ((System.currentTimeMillis() - vm.updatedAt) / 60_000).coerceAtLeast(0)
+                    Text(
+                        (if (vm.offline) "⚠ Hors ligne · " else "Mise à jour… · ") +
+                            if (age < 1) "liste de moins d'une minute" else "liste d'il y a ${since(java.time.Instant.ofEpochMilli(vm.updatedAt).toString())}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (vm.offline) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                }
                 // Nouvelle version de l'appli disponible sur le serveur
                 val newer = status?.appVersionCode?.takeIf { it > BuildConfig.VERSION_CODE }
                 var dismissed by rememberSaveable { mutableStateOf(0) }
@@ -346,12 +440,15 @@ fun HomeScreen(vm: DeckViewModel) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp),
                                 )
                             }
-                            items(shown, key = { it.name }) { c -> ChannelRow(c, status.miamiMode, vm, vm.drops[c.name]) { selected = c.name } }
+                            items(shown, key = { it.name }) { c ->
+                                SwipeRow(c, vm, Modifier.animateItem()) { ChannelRow(c, status.miamiMode, vm, vm.drops[c.name]) { selected = c.name } }
+                            }
                         }
                     }
                 }
             }
         }
+    }
     }
 
     if (showInbox && status != null) InboxDialog(status.inbox, onOpen = { name -> showInbox = false; selected = name }) { showInbox = false }
@@ -488,7 +585,48 @@ fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, drop: DropStat
             CardPip("É", "epic" in c.cards, Color(0xFFA855F7), enabled = !vm.busy) { vm.setCard(c, "epic", "epic" !in c.cards) }
             CardPip("L", "legendary" in c.cards, Color(0xFFF97316), enabled = !vm.busy) { vm.setCard(c, "legendary", "legendary" !in c.cards) }
         }
-        Switch(checked = c.enabled, onCheckedChange = { vm.setJoined(c, it) }, enabled = !vm.busy)
+        val haptic = LocalHapticFeedback.current
+        Switch(checked = c.enabled, onCheckedChange = {
+            haptic.performHapticFeedback(if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+            vm.setJoined(c, it)
+        }, enabled = !vm.busy)
+    }
+}
+
+/** Balayer une ligne vers la droite active le chat de la chaîne, vers la gauche le coupe. */
+@Composable
+fun SwipeRow(c: Channel, vm: DeckViewModel, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = { value ->
+        when (value) {
+            SwipeToDismissBoxValue.StartToEnd -> if (!c.enabled && !vm.busy) {
+                haptic.performHapticFeedback(HapticFeedbackType.ToggleOn); vm.setJoined(c, true)
+            }
+            SwipeToDismissBoxValue.EndToStart -> if (c.enabled && !vm.busy) {
+                haptic.performHapticFeedback(HapticFeedbackType.ToggleOff); vm.setJoined(c, false)
+            }
+            else -> Unit
+        }
+        false // la ligne revient toujours à sa place
+    })
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier,
+        enableDismissFromStartToEnd = !c.enabled,
+        enableDismissFromEndToStart = c.enabled,
+        backgroundContent = {
+            val toRight = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            if (state.dismissDirection != SwipeToDismissBoxValue.Settled) {
+                Box(
+                    Modifier.fillMaxSize().background(if (toRight) Color(0xFF16A34A) else Color(0xFF6B6B76)).padding(horizontal = 20.dp),
+                    contentAlignment = if (toRight) Alignment.CenterStart else Alignment.CenterEnd,
+                ) {
+                    Text(if (toRight) "Activer le chat" else "Couper le chat", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+    ) {
+        Box(Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = if (vm.status?.miamiMode == true) .88f else 1f))) { content() }
     }
 }
 
@@ -509,10 +647,11 @@ fun RowState(c: Channel) {
 
 @Composable
 fun CardPip(letter: String, owned: Boolean, color: Color, enabled: Boolean, onClick: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
     Box(
         Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
             .then(if (owned) Modifier.background(color) else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(7.dp)))
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Text(letter, fontSize = 12.sp, fontWeight = FontWeight.Bold,

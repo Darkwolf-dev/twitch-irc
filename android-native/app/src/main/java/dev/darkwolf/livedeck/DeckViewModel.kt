@@ -11,14 +11,49 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 class DeckViewModel(app: Application) : AndroidViewModel(app) {
-    private val api = Api(app.getSharedPreferences("deck", Context.MODE_PRIVATE))
+    private val prefs = app.getSharedPreferences("deck", Context.MODE_PRIVATE)
+    private val api = Api(prefs)
+    // Dernière liste reçue, gardée sur le téléphone : affichée dès l'ouverture, avant la réponse du serveur
+    private val cacheFile = File(app.filesDir, "status.json")
 
     var paired by mutableStateOf(api.token != null)
         private set
     var status by mutableStateOf<DeckStatus?>(null)
         private set
+    /** Heure de la dernière réponse du serveur (0 : jamais). */
+    var updatedAt by mutableStateOf(0L)
+        private set
+    /** Dernier rafraîchissement raté : la liste affichée est celle gardée en mémoire. */
+    var offline by mutableStateOf(false)
+        private set
+
+    // Préférences de l'appli
+    var dynamicColors by mutableStateOf(prefs.getBoolean("dynamicColors", false))
+        private set
+    var biometricLock by mutableStateOf(prefs.getBoolean("biometricLock", false))
+        private set
+    /** Écran verrouillé en attendant l'empreinte. */
+    var locked by mutableStateOf(prefs.getBoolean("biometricLock", false))
+
+    fun changeDynamicColors(on: Boolean) { dynamicColors = on; prefs.edit().putBoolean("dynamicColors", on).apply() }
+    fun changeBiometricLock(on: Boolean) { biometricLock = on; prefs.edit().putBoolean("biometricLock", on).apply() }
+
+    init {
+        if (paired) runCatching {
+            status = parseStatus(JSONObject(cacheFile.readText()))
+            updatedAt = cacheFile.lastModified()
+        }
+    }
+
+    private fun store(json: JSONObject) {
+        status = parseStatus(json)
+        updatedAt = System.currentTimeMillis()
+        offline = false
+        runCatching { cacheFile.writeText(json.toString()) }
+    }
     var error by mutableStateOf<String?>(null)
         private set
     var refreshing by mutableStateOf(false)
@@ -40,7 +75,7 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh(showSpinner: Boolean = false) = viewModelScope.launch {
         if (showSpinner) refreshing = true
         try {
-            status = parseStatus(api.call("/status"))
+            store(api.call("/status"))
             error = null
             if (System.currentTimeMillis() - dropsAt > 5 * 60_000) {
                 dropsAt = System.currentTimeMillis()
@@ -49,9 +84,12 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: ApiException) {
             // Clé révoquée depuis le panneau : retour au jumelage
             if (e.code == 401) unpair()
+            offline = true
             error = e.message
         } catch (e: Exception) {
-            error = "Serveur injoignable : ${e.message ?: "pas de réseau"}"
+            offline = true
+            // Avec une liste en mémoire, la bannière « hors ligne » suffit
+            error = if (status == null) "Serveur injoignable : ${e.message ?: "pas de réseau"}" else null
         } finally {
             refreshing = false
         }
@@ -74,13 +112,14 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         api.token = null
         paired = false
         status = null
+        cacheFile.delete()
     }
 
     private fun action(path: String, body: JSONObject) = viewModelScope.launch {
         busy = true
         try {
             api.call(path, body)
-            status = parseStatus(api.call("/status"))
+            store(api.call("/status"))
             error = null
             refreshWidgets(getApplication())
         } catch (e: Exception) {
