@@ -70,6 +70,7 @@ class DropTracker {
     this.dirty = true;
     this.save();
     this.log.log(`[drops] Drop sur #${drop.channel}${drop.boosters ? ` : ${drop.boosters} booster(s) ${drop.collection}` : ""}`);
+    return drop;
   }
 
   // Drop raté par le radar (pas encore dans le chat…), saisi dans le panneau

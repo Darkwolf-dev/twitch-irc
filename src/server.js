@@ -199,7 +199,7 @@ const irc = new TwitchIrc({
   onSanction: (sanction) => recordSanction(sanction),
   onMessage: (message) => {
     stats.countMessage(message.channel);
-    drops.handle(message);
+    if (drops.handle(message)) pushMiamiLive(true); // drop repéré : la notif « en direct » le montre tout de suite
     notifier.handle(message);
   },
   log,
@@ -211,6 +211,7 @@ const live = new LiveMonitor({
   onChange: () => {
     dormant.markLive([...live.live.keys()]);
     syncDesired();
+    pushMiamiLive();
   },
   onWentLive: (channel, info) => {
     if (isWatched(channel)) return; // marquée « fini » pour aujourd'hui : pas d'alerte
@@ -1162,6 +1163,7 @@ app.post("/settings", (req, res) => {
   if (miamiMode !== undefined && miamiMode !== settings.miamiMode) {
     settings.miamiMode = miamiMode;
     log.log(`[api] Mode Miami ${miamiMode ? "activé" : "désactivé"}`);
+    setImmediate(() => pushMiamiLive(true)); // mode coupé : la notif « en direct » disparaît
   }
   if (newQuiet && JSON.stringify(newQuiet) !== JSON.stringify(settings.quietHours)) {
     settings.quietHours = newQuiet;
@@ -1241,6 +1243,37 @@ app.post("/app/fcm/test", async (req, res) => {
   if (!sent) return res.status(502).json({ error: "Firebase a refusé la notification" });
   res.json({ ok: true, sent });
 });
+
+// --- Notif « Miami en direct » de l'appli native ---
+// Les chaînes miami en live sont envoyées au téléphone (message Firebase « miami »), qui tient à jour
+// une notification permanente. Envoi quand la liste change ou qu'un drop tombe, et toutes les 5 min
+// pour les spectateurs ; une liste vide fait disparaître la notification.
+let miamiSent = { key: null, at: 0 };
+function miamiSnapshot() {
+  if (!settings.miamiMode) return [];
+  return [...saved]
+    .filter((name) => groupsOf(name).some((g) => g.toLowerCase() === "miami") && live.info(name))
+    .map((name) => {
+      const info = live.info(name);
+      return { n: name, d: info.displayName || name, v: info.viewers, s: info.startedAt,
+        drop: drops.recentDropOf(name)?.at ?? null, b: drops.boostersToday(name, watchDay) };
+    })
+    .sort((a, b) => b.v - a.v);
+}
+function pushMiamiLive(force = false) {
+  if (!nativePush.count()) return;
+  const list = miamiSnapshot();
+  const key = JSON.stringify(list.map(({ n, drop, b }) => [n, drop, b]));
+  const now = Date.now();
+  const changed = key !== miamiSent.key;
+  // Rien à montrer et rien de montré : inutile d'écrire au téléphone
+  if (!list.length && miamiSent.key === "[]") return;
+  if (!force && !changed && now - miamiSent.at < 5 * 60_000) return;
+  miamiSent = { key, at: now };
+  nativePush.send({ type: "miami", channels: JSON.stringify(list), sentAt: new Date(now).toISOString() })
+    .catch((err) => log.error(`[fcm] Notif Miami : ${err.message}`));
+}
+setInterval(() => pushMiamiLive(), 5 * 60_000).unref();
 
 app.post("/app/devices/remove", (req, res) => {
   if (!appDevices.remove(String(req.body?.id ?? ""))) return res.status(404).json({ error: "Appareil inconnu" });
