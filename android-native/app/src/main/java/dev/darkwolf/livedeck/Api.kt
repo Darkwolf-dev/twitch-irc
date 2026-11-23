@@ -65,8 +65,11 @@ data class Channel(
     val state: String,
     val watched: Boolean,
     val lastMessageAge: Int?,
-    val banned: Boolean,
+    val sanction: String?,      // "ban" ou "timeout"
+    val sanctionUntil: String?,
+    val lastDrop: String?,      // heure du dernier drop vu sur la chaîne
 ) {
+    val banned get() = sanction == "ban"
     val miami get() = groups.any { it.equals("miami", ignoreCase = true) }
     val noCard get() = cards.isEmpty()
     val todo get() = live != null && !watched && !banned
@@ -87,6 +90,19 @@ data class DeckStatus(
     val appVersionCode: Int?,
     val appVersionName: String?,
 )
+
+/** Radar à drops : boosters vus par jour de présence dans le chat. */
+data class DropStat(val boosters: Int, val presenceDays: Int, val perDay: Double?, val score: Double)
+
+fun parseDrops(j: JSONObject): Map<String, DropStat> = j.optJSONArray("channels")?.let { arr ->
+    (0 until arr.length()).associate { i ->
+        val d = arr.getJSONObject(i)
+        d.getString("channel") to DropStat(
+            d.optInt("boosters"), d.optInt("presenceDays"),
+            if (d.isNull("perDay")) null else d.optDouble("perDay"), d.optDouble("score", 0.0),
+        )
+    }
+} ?: emptyMap()
 
 data class ChatMessage(val id: Long, val user: String, val color: String?, val text: String, val action: Boolean, val at: Long)
 
@@ -139,7 +155,9 @@ fun parseStatus(j: JSONObject): DeckStatus {
                 state = c.optString("state"),
                 watched = c.optBoolean("watched"),
                 lastMessageAge = c.optJSONObject("lastMessage")?.optInt("ageSeconds"),
-                banned = c.optJSONObject("sanction")?.optString("type") == "ban",
+                sanction = c.optJSONObject("sanction")?.str("type"),
+                sanctionUntil = c.optJSONObject("sanction")?.str("until"),
+                lastDrop = c.str("lastDrop"),
             )
         }
     } ?: emptyList()

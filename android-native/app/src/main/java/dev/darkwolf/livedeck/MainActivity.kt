@@ -53,6 +53,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 
 val TwitchPurple = Color(0xFF9146FF)
 val MiamiPink = Color(0xFFFF4FA0)
@@ -318,7 +319,7 @@ fun HomeScreen(vm: DeckViewModel) {
                             else TextButton(onClick = { vm.unpair() }) { Text("Jumeler à nouveau") }
                         }
                     } else {
-                        val shown = visibleChannels(status, view, sort, query)
+                        val shown = visibleChannels(status, view, sort, query, vm.drops)
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                             if (shown.isEmpty()) item {
                                 Text(
@@ -326,7 +327,7 @@ fun HomeScreen(vm: DeckViewModel) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp),
                                 )
                             }
-                            items(shown, key = { it.name }) { c -> ChannelRow(c, status.miamiMode, vm) { selected = c.name } }
+                            items(shown, key = { it.name }) { c -> ChannelRow(c, status.miamiMode, vm, vm.drops[c.name]) { selected = c.name } }
                         }
                     }
                 }
@@ -366,14 +367,14 @@ private fun statusRank(c: Channel) = when {
     else -> 4
 }
 
-fun visibleChannels(status: DeckStatus, view: String, sort: Sort, query: String): List<Channel> {
+fun visibleChannels(status: DeckStatus, view: String, sort: Sort, query: String, drops: Map<String, DropStat> = emptyMap()): List<Channel> {
     val words = query.lowercase().split(Regex("[\\s,;]+")).filter { it.isNotBlank() }
     val list = status.channels.filter { c ->
         inView(c, view, status.miamiMode) && (words.isEmpty() || words.any { c.name.contains(it) })
     }
     val base: Comparator<Channel> = when {
-        // « À farmer » : le moins de cartes d'abord, puis les plus gros lives
-        view == "todo" -> compareBy<Channel> { it.cards.size }.thenByDescending { it.live?.viewers ?: -1 }
+        // « À farmer » : le moins de cartes d'abord, puis les plus généreuses en drops, puis les plus gros lives
+        view == "todo" -> compareBy<Channel> { it.cards.size }.thenByDescending { drops[it.name]?.score ?: 0.0 }.thenByDescending { it.live?.viewers ?: -1 }
         sort == Sort.Viewers -> compareBy<Channel> { it.watched }.thenByDescending { it.live?.viewers ?: -1 }
         sort == Sort.Name -> compareBy { it.name }
         sort == Sort.Activity -> compareBy { it.lastMessageAge ?: Int.MAX_VALUE }
@@ -412,8 +413,9 @@ fun Tag(text: String, color: Color) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, onClick: () -> Unit) {
+fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, drop: DropStat?, onClick: () -> Unit) {
     val rowBg = if (c.miami) Modifier.background(
         Brush.horizontalGradient(listOf(MiamiPink.copy(alpha = .14f), Color(0xFFFFA64D).copy(alpha = .10f), MiamiCyan.copy(alpha = .08f))),
     ) else Modifier
@@ -439,8 +441,23 @@ fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, onClick: () ->
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp),
+                itemVerticalAlignment = Alignment.CenterVertically) {
                 RowState(c)
+                // Live commencé il y a moins de 15 minutes
+                if (c.live != null && minutesSince(c.live.startedAt)?.let { it < 15 } == true) Tag("nouveau", Color(0xFF22C55E))
+                // Drop il y a moins de 30 min : pas de nouveau drop possible avant la fin de l'attente
+                val wait = minutesSince(c.lastDrop)?.let { 30 - it }
+                if (wait != null && wait > 0) Tag("⏱ drop dans $wait min", Color(0xFFF59E0B).copy(alpha = if (c.live != null) 1f else .5f))
+                // Boosters par jour de présence (radar à drops)
+                if (drop != null && drop.presenceDays > 0) {
+                    Text(if (drop.boosters > 0) "🎁 ${"%.1f".format(Locale.FRANCE, drop.perDay ?: 0.0)}/j" else "🎁 0",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (drop.boosters > 0) 1f else .5f))
+                }
+                when (c.sanction) {
+                    "ban" -> Tag("⛔ banni", MaterialTheme.colorScheme.error)
+                    "timeout" -> Tag("⏱ timeout", Color(0xFFF59E0B))
+                }
                 if (c.miami) Tag("miami", MiamiPink)
                 if (c.noCard) Tag("sans carte", MiamiCyan)
             }
@@ -481,6 +498,9 @@ fun CardPip(letter: String, owned: Boolean, color: Color, enabled: Boolean, onCl
             color = if (owned) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+fun minutesSince(iso: String?): Long? =
+    iso?.let { runCatching { Instant.parse(it) }.getOrNull() }?.let { Duration.between(it, Instant.now()).toMinutes() }
 
 fun formatViewers(n: Int) = if (n >= 1000) "%.1f k".format(n / 1000f).replace(".0 ", " ") else "$n"
 

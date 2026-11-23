@@ -25,6 +25,10 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var busy by mutableStateOf(false)
         private set
+    /** Radar à drops, rechargé toutes les 5 minutes au plus. */
+    var drops by mutableStateOf<Map<String, DropStat>>(emptyMap())
+        private set
+    private var dropsAt = 0L
     /** Chaîne à ouvrir (appui sur une notification). */
     var pendingChannel by mutableStateOf<String?>(null)
 
@@ -38,6 +42,10 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
         try {
             status = parseStatus(api.call("/status"))
             error = null
+            if (System.currentTimeMillis() - dropsAt > 5 * 60_000) {
+                dropsAt = System.currentTimeMillis()
+                runCatching { drops = parseDrops(api.call("/drops")) }
+            }
         } catch (e: ApiException) {
             // Clé révoquée depuis le panneau : retour au jumelage
             if (e.code == 401) unpair()
