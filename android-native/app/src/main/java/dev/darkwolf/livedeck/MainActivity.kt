@@ -129,6 +129,7 @@ class MainActivity : FragmentActivity() {
 
     private fun handle(intent: Intent?) {
         intent?.getStringExtra(EXTRA_CHANNEL)?.let { vm.pendingChannel = it }
+        intent?.getStringExtra(EXTRA_VIEW)?.let { vm.pendingView = it }
     }
 
     private fun setUpNotifications() {
@@ -279,6 +280,14 @@ fun HomeScreen(vm: DeckViewModel) {
     // Appui sur une notification : ouvrir la fiche de la chaîne
     LaunchedEffect(vm.pendingChannel) {
         vm.pendingChannel?.let { selected = it; vm.pendingChannel = null }
+    }
+    // Appui sur la notif Miami en direct : vue du groupe miami
+    LaunchedEffect(vm.pendingView, status?.groups) {
+        if (vm.pendingView == "miami") {
+            status?.groups?.find { it.equals("miami", ignoreCase = true) }?.let {
+                view = "group:$it"; selected = null; showSettings = false; vm.pendingView = null
+            }
+        }
     }
     val open = status?.channels?.find { it.name == selected }
     // Fiche gardée pendant l'animation de sortie

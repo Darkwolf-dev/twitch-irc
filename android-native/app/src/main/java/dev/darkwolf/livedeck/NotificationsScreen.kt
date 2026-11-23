@@ -64,6 +64,22 @@ fun NotificationsScreen(vm: DeckViewModel, onBack: () -> Unit) {
 
             HorizontalDivider()
 
+            // Notif « Miami en direct »
+            var miamiLive by remember { mutableStateOf(MiamiLive.enabled(context)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Notif Miami en direct", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Une notification permanente avec tes chaînes miami en live, mise à jour en continu, visible aussi sur l'écran de verrouillage." +
+                            if (status.miamiMode) "" else " Elle ne s'affiche que quand le mode Miami 🌴 est actif.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = miamiLive, onCheckedChange = { miamiLive = it; MiamiLive.setEnabled(context, it) })
+            }
+
+            HorizontalDivider()
+
             // Où part chaque type d'alerte
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("Où envoyer les alertes", style = MaterialTheme.typography.titleMedium)

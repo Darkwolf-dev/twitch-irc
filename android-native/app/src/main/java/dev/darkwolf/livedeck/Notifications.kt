@@ -28,6 +28,7 @@ import java.net.URL
 const val CHANNEL_ALERTS = "alerts"
 const val CHANNEL_QUIET = "quiet"
 const val EXTRA_CHANNEL = "dev.darkwolf.livedeck.CHANNEL"
+const val EXTRA_VIEW = "dev.darkwolf.livedeck.VIEW"
 
 /** Démarrage de l'appli : Firebase configuré à la main (sans google-services.json dans le dépôt) et canaux de notification. */
 class DeckApplication : Application() {
@@ -71,6 +72,12 @@ class DeckMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
+        // Mise à jour de la notif « Miami en direct » (pas une alerte)
+        if (d["type"] == "miami") {
+            MiamiLive.update(this, d["channels"] ?: "[]")
+            runBlocking { refreshWidgets(this@DeckMessagingService) }
+            return
+        }
         val title = d["title"] ?: "Twitch Deck"
         val body = d["body"].orEmpty()
         val channel = d["channel"]

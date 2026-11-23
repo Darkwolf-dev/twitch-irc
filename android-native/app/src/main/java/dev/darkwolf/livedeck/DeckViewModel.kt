@@ -66,6 +66,8 @@ class DeckViewModel(app: Application) : AndroidViewModel(app) {
     private var dropsAt = 0L
     /** Chaîne à ouvrir (appui sur une notification). */
     var pendingChannel by mutableStateOf<String?>(null)
+    /** Vue à afficher (« miami » : appui sur la notif Miami en direct). */
+    var pendingView by mutableStateOf<String?>(null)
 
     /** Envoie l'identifiant Firebase de ce téléphone au serveur (notifications de l'appli). */
     fun registerFcm(token: String) = viewModelScope.launch {

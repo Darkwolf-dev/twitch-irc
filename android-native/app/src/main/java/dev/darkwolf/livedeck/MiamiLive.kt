@@ -1,0 +1,113 @@
+package dev.darkwolf.livedeck
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import org.json.JSONArray
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+/**
+ * Notif « Miami en direct » : une notification permanente avec les chaînes miami en live,
+ * tenue à jour par les messages « miami » du serveur. Il faut le mode Miami (côté serveur)
+ * et l'option « Notif Miami en direct » (Réglages de l'appli).
+ */
+object MiamiLive {
+    private const val CHANNEL_ID = "miami_live"
+    private const val NOTIFICATION_ID = 4242
+    private val clock = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+
+    fun enabled(context: Context) = deckPrefs(context).getBoolean("miamiLive", true)
+
+    fun setEnabled(context: Context, on: Boolean) {
+        deckPrefs(context).edit().putBoolean("miamiLive", on).apply()
+        if (on) {
+            // On réaffiche la dernière liste reçue, s'il y en a une
+            deckPrefs(context).getString("miamiLiveLast", null)?.let { show(context, it) }
+        } else cancel(context)
+    }
+
+    private fun hiddenToday(context: Context) =
+        deckPrefs(context).getString("miamiLiveHiddenDay", null) == LocalDate.now().toString()
+
+    fun cancel(context: Context) = NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+
+    /** Message « miami » du serveur : liste des chaînes miami en live (JSON). */
+    fun update(context: Context, channelsJson: String) {
+        deckPrefs(context).edit().putString("miamiLiveLast", channelsJson).apply()
+        if (!enabled(context) || hiddenToday(context)) return
+        show(context, channelsJson)
+    }
+
+    private fun show(context: Context, channelsJson: String) {
+        val list = runCatching { JSONArray(channelsJson) }.getOrNull() ?: return
+        if (list.length() == 0) return cancel(context)
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Miami en direct", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Chaînes miami en live, mises à jour en continu"
+                setSound(null, null)
+                enableVibration(false)
+            },
+        )
+
+        val lines = (0 until list.length()).map { i ->
+            val c = list.getJSONObject(i)
+            val parts = mutableListOf("${formatViewers(c.optInt("v"))} · ${since(c.optString("s"))}")
+            // Heure du prochain drop possible (30 min après le dernier) : reste juste entre deux mises à jour
+            c.optString("drop").takeIf { it.isNotEmpty() && it != "null" }?.let { drop ->
+                runCatching { Instant.parse(drop).plusSeconds(30 * 60) }.getOrNull()
+                    ?.takeIf { it.isAfter(Instant.now()) }
+                    ?.let { parts += "⏱ drop vers ${clock.format(it)}" }
+            }
+            c.optInt("b").takeIf { it > 0 }?.let { parts += "🎁 $it" }
+            "${c.optString("d")}  ${parts.joinToString(" · ")}"
+        }
+        val title = "🌴 Miami · ${list.length()} en live"
+
+        val open = PendingIntent.getActivity(
+            context, NOTIFICATION_ID,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(EXTRA_VIEW, "miami"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val hide = PendingIntent.getBroadcast(
+            context, NOTIFICATION_ID, Intent(context, HideMiamiLiveReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_deck)
+            .setContentTitle(title)
+            .setContentText(lines.joinToString("  ·  ") { it.substringBefore("  ") })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setColor(0xFFFF4FA0.toInt())
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // visible sur l'écran de verrouillage
+            .addAction(0, "Ouvrir Miami", open)
+            .addAction(0, "Masquer jusqu'à demain", hide)
+            // Android 16 : notif « en direct » mise en avant, avec une pastille dans la barre d'état
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText("🌴 ${list.length()}")
+        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build()) }
+    }
+}
+
+/** Bouton « Masquer jusqu'à demain ». */
+class HideMiamiLiveReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        deckPrefs(context).edit().putString("miamiLiveHiddenDay", LocalDate.now().toString()).apply()
+        MiamiLive.cancel(context)
+    }
+}
