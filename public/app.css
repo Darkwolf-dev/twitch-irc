@@ -945,3 +945,10 @@ body.miami::before {
 /* Code de jumelage de l'appli Android */
 .pair-code { margin: 10px 0 4px; font-size: 15px; }
 .pair-code strong { font: 700 26px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .12em; }
+/* Boosters distribués aujourd'hui sur la chaîne */
+.v2-today {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--ok); border: 1px solid currentColor;
+}
+.v2-today .v2-icon { width: 12px; height: 12px; stroke-width: 2; }

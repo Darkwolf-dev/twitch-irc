@@ -90,6 +90,10 @@ private fun Overview(c: Channel, vm: DeckViewModel) {
             if (live.title.isNotBlank()) Text(live.title, style = MaterialTheme.typography.bodyLarge)
             if (live.game.isNotBlank()) Text("🎮 ${live.game}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } ?: Text("Hors ligne", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (c.boostersToday > 0) {
+            Text("🎁 ${c.boostersToday} booster${if (c.boostersToday > 1) "s" else ""} distribué${if (c.boostersToday > 1) "s" else ""} aujourd'hui",
+                color = Color(0xFF22C55E), fontWeight = FontWeight.SemiBold)
+        }
 
         Button(
             onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.twitch.tv/${c.name}"))) },

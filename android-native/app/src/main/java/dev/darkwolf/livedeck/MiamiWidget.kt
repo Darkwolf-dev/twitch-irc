@@ -202,6 +202,9 @@ private fun ChannelLine(c: Channel, avatar: Bitmap?) {
                     Text("hors ligne${c.lastLive?.let { " · ${since(it)}" } ?: ""} · ", maxLines = 1, style = TextStyle(color = mutedColor, fontSize = 11.sp))
                 }
                 Text(chat, maxLines = 1, style = TextStyle(color = chatColor, fontSize = 11.sp))
+                if (c.boostersToday > 0) {
+                    Text("  🎁 ${c.boostersToday}", maxLines = 1, style = TextStyle(color = okColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                }
                 val wait = minutesSince(c.lastDrop)?.let { 30 - it }
                 if (wait != null && wait > 0) {
                     Text("  ⏱ drop $wait min", maxLines = 1, style = TextStyle(color = amberColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))

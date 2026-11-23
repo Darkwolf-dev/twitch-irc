@@ -594,6 +594,7 @@ function channelInfo(name) {
     watched: isWatched(name),
     cards: cardsOf(name),
     lastDrop: drops.recentDropOf(name)?.at ?? null,
+    boostersToday: drops.boostersToday(name, watchDay), // boosters distribués aujourd'hui (heure de Paris)
   };
 }
 

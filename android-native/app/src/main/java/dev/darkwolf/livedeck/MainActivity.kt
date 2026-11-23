@@ -465,9 +465,11 @@ fun ChannelRow(c: Channel, miamiMode: Boolean, vm: DeckViewModel, drop: DropStat
                 // Drop il y a moins de 30 min : pas de nouveau drop possible avant la fin de l'attente
                 val wait = minutesSince(c.lastDrop)?.let { 30 - it }
                 if (wait != null && wait > 0) Tag("⏱ drop dans $wait min", Color(0xFFF59E0B).copy(alpha = if (c.live != null) 1f else .5f))
-                // Boosters par jour de présence (radar à drops)
+                // Boosters distribués aujourd'hui sur la chaîne
+                if (c.boostersToday > 0) Tag("🎁 ${c.boostersToday} auj.", Color(0xFF22C55E))
+                // Moyenne de boosters par jour de présence (radar à drops)
                 if (drop != null && drop.presenceDays > 0) {
-                    Text(if (drop.boosters > 0) "🎁 ${"%.1f".format(Locale.FRANCE, drop.perDay ?: 0.0)}/j" else "🎁 0",
+                    Text(if (drop.boosters > 0) "moy. ${"%.1f".format(Locale.FRANCE, drop.perDay ?: 0.0)}/j" else "moy. 0",
                         fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (drop.boosters > 0) 1f else .5f))
                 }
                 when (c.sanction) {

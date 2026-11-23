@@ -112,6 +112,22 @@ class DropTracker {
     }
   }
 
+  // Boosters distribués aujourd'hui sur une chaîne (somme des annonces, pas le nombre de drops).
+  // dayOf(date) donne la journée (« AAAA-MM-JJ ») dans le fuseau du serveur de visionnage.
+  boostersToday(channel, dayOf) {
+    const today = dayOf(Date.now());
+    let total = 0;
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      if (dayOf(d.at) !== today) {
+        if (Date.now() - Date.parse(d.at) > 36 * 3600_000) break; // drops triés par date : inutile de remonter plus loin
+        continue;
+      }
+      if (d.channel === channel) total += boostersOf(d);
+    }
+    return total;
+  }
+
   // Drop repéré dans le chat il y a moins de 30 min : la chaîne ne peut pas redropper tout de suite
   // (les ajouts à la main n'ont pas d'heure fiable)
   recentDropOf(channel) {

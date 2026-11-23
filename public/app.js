@@ -537,6 +537,11 @@ function renderChannel(channel) {
     class: `v2-drop${channel.live ? "" : " is-off"}`,
     title: `Drop à ${new Date(channel.lastDrop).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} : pas de nouveau drop possible avant ${wait} min`,
   }, icon("clock"), `drop dans ${wait} min`);
+  // Boosters distribués aujourd'hui sur la chaîne (somme des annonces de drop repérées)
+  const today = channel.boostersToday > 0 && el("span", {
+    class: "v2-today",
+    title: `${channel.boostersToday} booster${channel.boostersToday > 1 ? "s" : ""} distribué${channel.boostersToday > 1 ? "s" : ""} aujourd'hui sur cette chaîne (drops repérés dans le chat)`,
+  }, icon("gift"), `${channel.boostersToday} auj.`);
   // Boosters par jour de présence (radar à drops), discret ; rien tant qu'on n'a jamais été dans le chat
   const stats = dropScore(channel.name);
   const rate = stats?.presenceDays > 0 && el("span", {
@@ -577,7 +582,7 @@ function renderChannel(channel) {
       title: `Chat, stats et réglages de ${channel.name}`,
       onclick: () => openChannel(channel.name),
     }, channel.name),
-    favMark, badge, fresh, rate, dropped, sanction, modeTag, ...groupTags,
+    favMark, badge, fresh, today, rate, dropped, sanction, modeTag, ...groupTags,
     channel.watched && el("span", { class: "seen-badge", title: `Finie pour aujourd'hui : chat quitté jusqu'à ${RESET_AT}` }, "fini"));
 
   // Ligne 2 : jeu et titre en live ; sinon dernier message reçu, ou date du dernier live
