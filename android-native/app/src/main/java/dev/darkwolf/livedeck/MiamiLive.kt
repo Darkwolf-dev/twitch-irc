@@ -24,7 +24,8 @@ import java.time.format.DateTimeFormatter
  * et l'option « Notif Miami en direct » (Réglages de l'appli).
  */
 object MiamiLive {
-    private const val CHANNEL_ID = "miami_live"
+    // v2 : sans pastille sur l'icône (les réglages d'un canal ne changent plus une fois créé)
+    private const val CHANNEL_ID = "miami_live_v2"
     private const val NOTIFICATION_ID = 4242
     private val clock = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
 
@@ -66,17 +67,22 @@ object MiamiLive {
         if (list.length() == 0) return cancel(context)
 
         val manager = context.getSystemService(NotificationManager::class.java)
+        manager.deleteNotificationChannel("miami_live") // ancien canal, avec pastille sur l'icône
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Miami en direct", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Chaînes miami en live, mises à jour en continu"
                 setSound(null, null)
                 enableVibration(false)
+                setShowBadge(false) // pas de point permanent sur l'icône de l'appli
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             },
         )
 
         val lines = (0 until list.length()).map { i ->
             val c = list.getJSONObject(i)
             val parts = mutableListOf("${formatViewers(c.optInt("v"))} · ${since(c.optString("s"))}")
+            // Dans le chat ou non : hors du chat, les drops passent sans toi
+            if (c.has("chat")) parts += if (c.optBoolean("chat")) "💬" else "⚠ hors chat"
             // Fin de l'attente de 30 min après un drop : aucun drop possible avant cette heure (après, rien n'est garanti)
             c.optString("drop").takeIf { it.isNotEmpty() && it != "null" }?.let { drop ->
                 runCatching { Instant.parse(drop).plusSeconds(30 * 60) }.getOrNull()
@@ -105,8 +111,9 @@ object MiamiLive {
             .setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
             .setContentIntent(open)
             .setOngoing(true)
+            // Pas « silencieuse » : Android masque les notifs silencieuses sur l'écran de verrouillage.
+            // Le canal n'a ni son ni vibration, et elle ne prévient qu'une fois.
             .setOnlyAlertOnce(true)
-            .setSilent(true)
             .setColor(0xFFFF4FA0.toInt())
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // visible sur l'écran de verrouillage
