@@ -1,0 +1,13 @@
+{
+  "name": "twitch-deck-android",
+  "private": true,
+  "description": "Appli Android de Twitch Deck : le panneau dans une vraie appli, avec notifications et widgets",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/cli": "8.6.2",
+    "@capacitor/core": "8.6.2"
+  }
+}
