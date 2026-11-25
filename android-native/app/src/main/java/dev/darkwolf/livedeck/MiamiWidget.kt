@@ -197,13 +197,17 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                         data.error ?: "$live en live · $joined chat${if (joined > 1) "s" else ""} connecté${if (joined > 1) "s" else ""}",
                         style = TextStyle(color = mutedColor, fontSize = 11.sp),
                     )
+                }
+                // Heure de la dernière mise à jour sous le ⟳ (orange + ⚠ = serveur injoignable, dernier état gardé),
+                // sans ajouter de ligne à l'en-tête : la liste déborderait et une barre de défilement apparaîtrait
+                Column(GlanceModifier.padding(horizontal = 6.dp).clickable(actionRunCallback<RefreshAction>()),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⟳", style = TextStyle(color = textColor, fontSize = 18.sp))
                     data.updatedAt?.let {
-                        Text(if (data.stale) "hors ligne · màj ${clockLabel(it)}" else "màj ${clockLabel(it)}", maxLines = 1,
-                            style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 10.sp))
+                        Text(if (data.stale) "⚠ ${clockLabel(it)}" else clockLabel(it), maxLines = 1,
+                            style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 9.sp))
                     }
                 }
-                Text("⟳", modifier = GlanceModifier.padding(8.dp).clickable(actionRunCallback<RefreshAction>()),
-                    style = TextStyle(color = textColor, fontSize = 18.sp))
                 Text(if (locked) "🔒" else "🔓", modifier = GlanceModifier.padding(8.dp)
                     .clickable(actionRunCallback<ToggleLockAction>(actionParametersOf(LockKey to !locked))),
                     style = TextStyle(color = if (locked) pinkColor else mutedColor, fontSize = 16.sp))
