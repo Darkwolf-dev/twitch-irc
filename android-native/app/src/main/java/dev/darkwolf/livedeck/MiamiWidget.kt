@@ -123,7 +123,8 @@ private suspend fun fetchWidgetData(context: Context): Boolean = withContext(Dis
         prefs.edit().putString(CACHE_PREF, json.toString()).putLong(CACHE_TIME_PREF, System.currentTimeMillis())
             .putBoolean(FAILED_PREF, false).remove(ERROR_PREF).apply()
         parseStatus(json).channels.filter { it.miami }.forEach { c ->
-            val url = c.avatar ?: return@forEach
+            // Avatars Twitch uniquement (CDN public), comme les notifications
+            val url = c.avatar?.takeIf { it.startsWith("https://static-cdn.jtvnw.net/") } ?: return@forEach
             val file = avatarFile(context, c.name)
             if (!file.exists() || System.currentTimeMillis() - file.lastModified() > 86_400_000) runCatching {
                 file.parentFile?.mkdirs()
