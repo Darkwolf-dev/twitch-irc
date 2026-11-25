@@ -36,6 +36,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.currentState
+import androidx.compose.ui.unit.DpSize
+import androidx.glance.LocalSize
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
@@ -178,6 +181,15 @@ private fun clockLabel(t: Long): String {
     }
 }
 
+/** Fin de l'attente de 30 min après un drop (ms), ou null si elle est passée. */
+private fun dropWaitUntil(c: Channel): Long? =
+    c.lastDrop?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() + 30 * 60_000 }.getOrNull() }
+        ?.takeIf { it > System.currentTimeMillis() }
+
+/** Heure d'un instant ISO du serveur (« 09:04 », « hier 22:10 »…), ou null. */
+private fun isoClock(iso: String?): String? =
+    iso?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }?.let(::clockLabel)
+
 // Après un appui, Glance garde le widget actif ~45 s et une mise à jour ne fait que le recomposer, sans
 // relancer provideGlance : les données sont donc relues DANS la composition, à chaque nouvelle « version »
 // écrite dans l'état Glance du widget (sinon cadenas et ⟳ semblent ne rien faire).
@@ -216,7 +228,13 @@ private val ChannelExtra = ActionParameters.Key<String>(EXTRA_CHANNEL)
 
 // --- Grand widget (4 × 3) ---
 
+private val NarrowSize = DpSize(180.dp, 110.dp)
+private val WideSize = DpSize(250.dp, 180.dp)
+
 class MiamiWidget : GlanceAppWidget() {
+    // Deux mises en page : étroite (avatar, nom, interrupteur) et complète
+    override val sizeMode = SizeMode.Responsive(setOf(NarrowSize, WideSize))
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val version = currentState(VersionKey) ?: 0L
@@ -231,6 +249,7 @@ class MiamiWidget : GlanceAppWidget() {
 
 @Composable
 private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked: Boolean, refreshing: Boolean) {
+    val narrow = LocalSize.current.width < WideSize.width
     val live = data.channels.count { it.live != null }
     val joined = data.channels.count { it.live != null && it.joined }
     Column(GlanceModifier.fillMaxSize().background(ImageProvider(R.drawable.widget_bg))) {
@@ -238,7 +257,7 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
         Column(GlanceModifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(GlanceModifier.defaultWeight().clickable(actionStartActivity<MainActivity>())) {
-                    Text("🌴 Miami", style = TextStyle(color = pinkColor, fontSize = 16.sp, fontWeight = FontWeight.Bold))
+                    Text(if (narrow) "Miami" else "🌴 Miami", style = TextStyle(color = pinkColor, fontSize = 16.sp, fontWeight = FontWeight.Bold))
                     Text(
                         data.error ?: "$live en live · $joined chat${if (joined > 1) "s" else ""} connecté${if (joined > 1) "s" else ""}",
                         style = TextStyle(color = mutedColor, fontSize = 11.sp),
@@ -246,7 +265,7 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                 }
                 // Heure de la dernière mise à jour sous le ⟳ (orange + ⚠ = serveur injoignable, dernier état gardé),
                 // sans ajouter de ligne à l'en-tête : la liste déborderait et une barre de défilement apparaîtrait
-                Column(GlanceModifier.padding(horizontal = 6.dp).clickable(actionRunCallback<RefreshAction>()),
+                Column(GlanceModifier.padding(horizontal = if (narrow) 3.dp else 6.dp).clickable(actionRunCallback<RefreshAction>()),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("⟳", style = TextStyle(color = if (refreshing) pinkColor else textColor, fontSize = 18.sp))
                     data.updatedAt?.let {
@@ -254,33 +273,37 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                             style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 9.sp))
                     }
                 }
-                Text(if (locked) "🔒" else "🔓", modifier = GlanceModifier.padding(8.dp)
+                Text(if (locked) "🔒" else "🔓", modifier = GlanceModifier.padding(if (narrow) 4.dp else 8.dp)
                     .clickable(actionRunCallback<ToggleLockAction>()),
                     style = TextStyle(color = if (locked) pinkColor else mutedColor, fontSize = 16.sp))
-                val palm = GlanceModifier.padding(8.dp)
+                val palm = GlanceModifier.padding(if (narrow) 4.dp else 8.dp)
                 Text("🌴", modifier = if (locked) palm
                     else palm.clickable(actionRunCallback<ToggleMiamiAction>(actionParametersOf(MiamiOnKey to !data.miamiMode))),
                     style = TextStyle(fontSize = 18.sp, color = if (data.miamiMode) pinkColor else mutedColor))
             }
             Spacer(GlanceModifier.height(4.dp))
             LazyColumn(GlanceModifier.fillMaxSize()) {
-                items(data.channels, itemId = { it.name.hashCode().toLong() }) { c -> ChannelLine(c, avatars[c.name], locked) }
+                items(data.channels, itemId = { it.name.hashCode().toLong() }) { c -> ChannelLine(c, avatars[c.name], locked, narrow) }
             }
         }
     }
 }
 
 @Composable
-private fun ChannelLine(c: Channel, avatar: Bitmap?, locked: Boolean) {
+private fun ChannelLine(c: Channel, avatar: Bitmap?, locked: Boolean, narrow: Boolean) {
     Row(
-        GlanceModifier.fillMaxWidth().padding(vertical = 5.dp)
+        GlanceModifier.fillMaxWidth().padding(vertical = if (narrow) 3.dp else 5.dp)
             .clickable(actionStartActivity<MainActivity>(actionParametersOf(ChannelExtra to c.name))),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (avatar != null) Image(ImageProvider(avatar), contentDescription = null, modifier = GlanceModifier.size(36.dp))
-        else Box(GlanceModifier.size(36.dp)) {}
-        Spacer(GlanceModifier.width(10.dp))
-        Column(GlanceModifier.defaultWeight()) {
+        val avatarSize = if (narrow) 28.dp else 36.dp
+        if (avatar != null) Image(ImageProvider(avatar), contentDescription = null, modifier = GlanceModifier.size(avatarSize))
+        else Box(GlanceModifier.size(avatarSize)) {}
+        Spacer(GlanceModifier.width(if (narrow) 8.dp else 10.dp))
+        // Étroit : juste le nom (l'anneau néon de l'avatar montre le live)
+        if (narrow) Text(c.displayName, maxLines = 1, modifier = GlanceModifier.defaultWeight(),
+            style = TextStyle(color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+        else Column(GlanceModifier.defaultWeight()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(c.displayName, maxLines = 1, style = TextStyle(color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Bold))
                 c.live?.let {
@@ -288,7 +311,8 @@ private fun ChannelLine(c: Channel, avatar: Bitmap?, locked: Boolean) {
                     Text(" LIVE ", modifier = GlanceModifier.background(ImageProvider(R.drawable.widget_live)),
                         style = TextStyle(color = ColorProvider(day = Color.White, night = Color.White), fontSize = 9.sp, fontWeight = FontWeight.Bold))
                     Spacer(GlanceModifier.width(5.dp))
-                    Text("${formatViewers(it.viewers)} · ${since(it.startedAt)}", maxLines = 1,
+                    // Heures et non durées : le widget n'est redessiné qu'aux mises à jour, une durée serait vite fausse
+                    Text(formatViewers(it.viewers) + (isoClock(it.startedAt)?.let { t -> " · depuis $t" } ?: ""), maxLines = 1,
                         style = TextStyle(color = liveColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 }
             }
@@ -299,15 +323,14 @@ private fun ChannelLine(c: Channel, avatar: Bitmap?, locked: Boolean) {
                     else -> "si live" to amberColor
                 }
                 if (c.live == null) {
-                    Text("hors ligne${c.lastLive?.let { " · ${since(it)}" } ?: ""} · ", maxLines = 1, style = TextStyle(color = mutedColor, fontSize = 11.sp))
+                    Text("hors ligne${isoClock(c.lastLive)?.let { " · $it" } ?: ""} · ", maxLines = 1, style = TextStyle(color = mutedColor, fontSize = 11.sp))
                 }
                 Text(chat, maxLines = 1, style = TextStyle(color = chatColor, fontSize = 11.sp))
                 if (c.boostersToday > 0) {
                     Text("  🎁 ${c.boostersToday}", maxLines = 1, style = TextStyle(color = okColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 }
-                val wait = minutesSince(c.lastDrop)?.let { 30 - it }
-                if (wait != null && wait > 0) {
-                    Text("  ⏱ attente $wait min", maxLines = 1, style = TextStyle(color = amberColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                dropWaitUntil(c)?.let {
+                    Text("  ⏱ jusqu'à ${clockLabel(it)}", maxLines = 1, style = TextStyle(color = amberColor, fontSize = 11.sp, fontWeight = FontWeight.Bold))
                 }
             }
         }
@@ -349,7 +372,8 @@ class MiamiCompactWidget : GlanceAppWidget() {
                 Spacer(GlanceModifier.width(10.dp))
                 Row(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
                     avatars.forEach { (c, bmp) ->
-                        if (bmp != null) Image(ImageProvider(bmp), contentDescription = c.name, modifier = GlanceModifier.size(30.dp))
+                        if (bmp != null) Image(ImageProvider(bmp), contentDescription = c.name, modifier = GlanceModifier.size(30.dp)
+                            .clickable(actionStartActivity<MainActivity>(actionParametersOf(ChannelExtra to c.name))))
                         Spacer(GlanceModifier.width(5.dp))
                     }
                 }
@@ -377,7 +401,13 @@ private val MiamiOnKey = ActionParameters.Key<Boolean>("miami")
 class ToggleLockAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         // Inverse l'état enregistré, pas celui affiché (qui peut avoir un temps de retard)
-        deckPrefs(context).edit().putBoolean(LOCK_PREF, !widgetLocked(context)).apply()
+        val lock = !widgetLocked(context)
+        deckPrefs(context).edit().putBoolean(LOCK_PREF, lock).apply()
+        // Déverrouillé : se referme tout seul après RELOCK_MINUTES, pour qu'un oubli ne laisse pas le panneau ouvert
+        val wm = WorkManager.getInstance(context)
+        if (lock) wm.cancelUniqueWork(RELOCK_WORK)
+        else wm.enqueueUniqueWork(RELOCK_WORK, ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<RelockWorker>().setInitialDelay(RELOCK_MINUTES, TimeUnit.MINUTES).build())
         renderWidgets(context)
     }
 }
@@ -404,6 +434,18 @@ class ToggleMiamiAction : ActionCallback {
     }
 }
 
+private const val RELOCK_WORK = "widgets-relock"
+private const val RELOCK_MINUTES = 2L
+
+/** Referme le cadenas du widget (lancé RELOCK_MINUTES après un déverrouillage). */
+class RelockWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        deckPrefs(applicationContext).edit().putBoolean(LOCK_PREF, true).apply()
+        renderWidgets(applicationContext)
+        return Result.success()
+    }
+}
+
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) = refreshWidgets(context)
 }
@@ -417,8 +459,16 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     override suspend fun doWork(): Result {
         val ctx = applicationContext
         val prefs = deckPrefs(ctx)
-        inputData.getString(KEY_PATH)?.let { path ->
+        // Tâche des 15 min : passe par la file, pour ne jamais télécharger en même temps qu'une action
+        if (inputData.getBoolean(KEY_PERIODIC, false)) { runNow(ctx); return Result.success() }
+        val path = inputData.getString(KEY_PATH)
+        if (path != null) {
             runCatching { Api(prefs).call(path, inputData.getString(KEY_BODY)?.let(::JSONObject)) }
+            pendingCommands(ctx, -1)
+        } else if (pendingCommands(ctx, 0) > 0) {
+            // Une action attend derrière : c'est elle qui téléchargera l'état (sinon l'ancien état écraserait
+            // la modif déjà affichée, et l'interrupteur reviendrait en arrière un instant)
+            return Result.success()
         }
         val ok = Api(prefs).token == null || fetchWidgetData(ctx)
         prefs.edit().putBoolean(REFRESHING_PREF, false).apply()
@@ -437,12 +487,31 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     companion object {
         private const val KEY_PATH = "path"
         private const val KEY_BODY = "body"
+        private const val KEY_PERIODIC = "periodic"
+        private const val QUEUE = "widgets-now"
+        private const val PENDING_PREF = "widgetPendingCommands"
+        private const val PENDING_TIME_PREF = "widgetPendingTime"
+        private val pendingLock = Any()
+
+        /**
+         * Nombre d'actions en attente dans la file (ajoute [delta]). Oublié au bout de 5 min sans nouvelle
+         * action : une action perdue (appli tuée) ne doit pas bloquer les rafraîchissements.
+         */
+        private fun pendingCommands(context: Context, delta: Int): Int = synchronized(pendingLock) {
+            val prefs = deckPrefs(context)
+            val now = System.currentTimeMillis()
+            val fresh = now - prefs.getLong(PENDING_TIME_PREF, 0) < 5 * 60_000
+            val n = ((if (fresh) prefs.getInt(PENDING_PREF, 0) else 0) + delta).coerceAtLeast(0)
+            prefs.edit().putInt(PENDING_PREF, n).apply { if (delta > 0) putLong(PENDING_TIME_PREF, now) }.commit()
+            n
+        }
         private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "widgets", ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<WidgetWorker>(15, TimeUnit.MINUTES).setConstraints(online).build(),
+                "widgets", ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<WidgetWorker>(15, TimeUnit.MINUTES).setConstraints(online)
+                    .setInputData(workDataOf(KEY_PERIODIC to true)).build(),
             )
         }
 
@@ -450,9 +519,12 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             .setConstraints(online).setInputData(data)
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
 
-        /** Rafraîchissement immédiat (ou dès que le réseau revient) ; une nouvelle demande remplace l'ancienne. */
+        /**
+         * Rafraîchissement immédiat (ou dès que le réseau revient). Actions et rafraîchissements passent par
+         * une seule file, exécutée dans l'ordre : jamais deux téléchargements ou une action en même temps.
+         */
         fun runNow(context: Context) {
-            WorkManager.getInstance(context).enqueueUniqueWork("widgets-now", ExistingWorkPolicy.REPLACE, request())
+            WorkManager.getInstance(context).enqueueUniqueWork(QUEUE, ExistingWorkPolicy.APPEND_OR_REPLACE, request())
         }
 
         /**
@@ -467,8 +539,10 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     ?.let { prefs.edit().putString(CACHE_PREF, it.toString()).apply() }
             }
             prefs.edit().putBoolean(REFRESHING_PREF, true).apply()
+            pendingCommands(context, +1)
             renderWidgets(context)
-            WorkManager.getInstance(context).enqueue(request(workDataOf(KEY_PATH to path, KEY_BODY to body.toString())))
+            WorkManager.getInstance(context).enqueueUniqueWork(QUEUE, ExistingWorkPolicy.APPEND_OR_REPLACE,
+                request(workDataOf(KEY_PATH to path, KEY_BODY to body.toString())))
         }
     }
 }
