@@ -31,7 +31,11 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.updateAll
+import androidx.compose.runtime.remember
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
@@ -49,7 +53,12 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.work.CoroutineWorker
+import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.ForegroundInfo
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.workDataOf
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -73,51 +82,65 @@ private data class MiamiData(
     val updatedAt: Long? = null, val stale: Boolean = false,
 )
 
-// Dernier /status reçu : téléphone verrouillé, Android coupe le réseau (mode veille) et les
-// rafraîchissements de fond échouent ; on garde alors la dernière liste au lieu d'afficher l'erreur.
+// Le widget n'appelle jamais le serveur lui-même : depuis Android 15, une appli en arrière-plan n'a le
+// réseau que dans une tâche qui le demande (sinon « Unable to resolve host »). WidgetWorker télécharge
+// l'état et les avatars avec cette contrainte, le garde ici, puis redessine les widgets.
 private const val CACHE_PREF = "widgetStatus"
 private const val CACHE_TIME_PREF = "widgetStatusTime"
+private const val FAILED_PREF = "widgetFetchFailed"
+private const val ERROR_PREF = "widgetFetchError"
+private const val REFRESHING_PREF = "widgetRefreshing"
 
 /** Verrou du grand widget : interrupteurs et palmier figés pour éviter les fausses manips. */
 private const val LOCK_PREF = "widgetLocked"
 private fun widgetLocked(context: Context) = deckPrefs(context).getBoolean(LOCK_PREF, false)
+private fun widgetRefreshing(context: Context) = deckPrefs(context).getBoolean(REFRESHING_PREF, false)
 
-private suspend fun loadMiami(context: Context): MiamiData {
-    val api = Api(deckPrefs(context))
-    if (api.token == null) return MiamiData(emptyList(), false, "Ouvre l'appli pour la jumeler")
+private fun loadMiami(context: Context): MiamiData {
     val prefs = deckPrefs(context)
-    var updatedAt = System.currentTimeMillis()
-    var stale = false
+    if (Api(prefs).token == null) return MiamiData(emptyList(), false, "Ouvre l'appli pour la jumeler")
+    val failed = prefs.getBoolean(FAILED_PREF, false)
+    val cached = prefs.getString(CACHE_PREF, null)
+        ?: return MiamiData(emptyList(), false, if (failed) prefs.getString(ERROR_PREF, null) ?: "Serveur injoignable" else "Chargement…")
     return try {
-        val json = try {
-            api.call("/status").also { prefs.edit().putString(CACHE_PREF, it.toString()).putLong(CACHE_TIME_PREF, updatedAt).apply() }
-        } catch (e: Exception) {
-            WidgetWorker.retryWhenOnline(context)
-            val cached = prefs.getString(CACHE_PREF, null) ?: throw e
-            updatedAt = prefs.getLong(CACHE_TIME_PREF, 0)
-            stale = true
-            JSONObject(cached)
-        }
-        val status = parseStatus(json)
+        val status = parseStatus(JSONObject(cached))
         val miami = status.channels.filter { it.miami }
             .sortedWith(compareByDescending<Channel> { it.live != null }.thenByDescending { it.live?.viewers ?: -1 }.thenBy { it.name })
-        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null, updatedAt, stale)
+        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null,
+            prefs.getLong(CACHE_TIME_PREF, 0), failed)
     } catch (e: Exception) {
-        MiamiData(emptyList(), false, e.message ?: "Serveur injoignable")
+        MiamiData(emptyList(), false, e.message ?: "Données illisibles")
+    }
+}
+
+private fun avatarFile(context: Context, name: String) = File(context.cacheDir, "avatars/$name.png")
+
+/** Télécharge l'état du panneau et les avatars du groupe miami (dans WidgetWorker, qui a le réseau). */
+private suspend fun fetchWidgetData(context: Context): Boolean = withContext(Dispatchers.IO) {
+    val prefs = deckPrefs(context)
+    try {
+        val json = Api(prefs).call("/status")
+        prefs.edit().putString(CACHE_PREF, json.toString()).putLong(CACHE_TIME_PREF, System.currentTimeMillis())
+            .putBoolean(FAILED_PREF, false).remove(ERROR_PREF).apply()
+        parseStatus(json).channels.filter { it.miami }.forEach { c ->
+            val url = c.avatar ?: return@forEach
+            val file = avatarFile(context, c.name)
+            if (!file.exists() || System.currentTimeMillis() - file.lastModified() > 86_400_000) runCatching {
+                file.parentFile?.mkdirs()
+                URL(url).openStream().use { input -> file.outputStream().use { input.copyTo(it) } }
+            }
+        }
+        true
+    } catch (e: Exception) {
+        prefs.edit().putBoolean(FAILED_PREF, true).putString(ERROR_PREF, e.message ?: "Serveur injoignable").apply()
+        false
     }
 }
 
 /** Avatar rond (gardé 1 jour en cache), avec anneau néon si la chaîne est en live, grisé sinon (version compacte). */
-private suspend fun avatar(context: Context, c: Channel, sizePx: Int, grayWhenOffline: Boolean): Bitmap? = withContext(Dispatchers.IO) {
-    val url = c.avatar ?: return@withContext null
-    val file = File(context.cacheDir, "avatars/${c.name}.png")
-    val raw = runCatching {
-        if (!file.exists() || System.currentTimeMillis() - file.lastModified() > 86_400_000) {
-            file.parentFile?.mkdirs()
-            URL(url).openStream().use { input -> file.outputStream().use { input.copyTo(it) } }
-        }
-        BitmapFactory.decodeFile(file.path)
-    }.getOrNull() ?: return@withContext null
+private fun avatar(context: Context, c: Channel, sizePx: Int, grayWhenOffline: Boolean): Bitmap? {
+    val file = avatarFile(context, c.name)
+    val raw = runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull() ?: return null
 
     val live = c.live != null
     val out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
@@ -139,7 +162,7 @@ private suspend fun avatar(context: Context, c: Channel, sizePx: Int, grayWhenOf
         if (!live && grayWhenOffline) alpha = 140
     }
     canvas.drawCircle(r, r, inner, shader)
-    out
+    return out
 }
 
 /** Heure de mise à jour : « 14:32 », « hier 22:10 » ou « 23/11 22:10 ». */
@@ -154,10 +177,28 @@ private fun clockLabel(t: Long): String {
     }
 }
 
-/** Rafraîchit tous les widgets (après une action, une alerte reçue, ou toutes les 15 min). */
+// Après un appui, Glance garde le widget actif ~45 s et une mise à jour ne fait que le recomposer, sans
+// relancer provideGlance : les données sont donc relues DANS la composition, à chaque nouvelle « version »
+// écrite dans l'état Glance du widget (sinon cadenas et ⟳ semblent ne rien faire).
+private val VersionKey = longPreferencesKey("version")
+
+/** Redessine les widgets à partir du cache (sans réseau). */
+private suspend fun renderWidgets(context: Context) {
+    val version = System.currentTimeMillis()
+    val manager = GlanceAppWidgetManager(context)
+    for (widget in listOf(MiamiWidget(), MiamiCompactWidget())) runCatching {
+        manager.getGlanceIds(widget.javaClass).forEach { id ->
+            updateAppWidgetState(context, id) { it[VersionKey] = version }
+            widget.update(context, id)
+        }
+    }
+}
+
+/** Rafraîchit les widgets (après une action, une alerte reçue, ⟳) : le ⟳ passe en rose le temps du téléchargement. */
 suspend fun refreshWidgets(context: Context) {
-    runCatching { MiamiWidget().updateAll(context) }
-    runCatching { MiamiCompactWidget().updateAll(context) }
+    deckPrefs(context).edit().putBoolean(REFRESHING_PREF, true).apply()
+    renderWidgets(context)
+    WidgetWorker.runNow(context)
 }
 
 private val Pink = Color(0xFFFF4FA0)
@@ -176,15 +217,19 @@ private val ChannelExtra = ActionParameters.Key<String>(EXTRA_CHANNEL)
 
 class MiamiWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = loadMiami(context)
-        val avatars = data.channels.associate { it.name to avatar(context, it, 96, grayWhenOffline = false) }
-        val locked = widgetLocked(context)
-        provideContent { MiamiContent(data, avatars, locked) }
+        provideContent {
+            val version = currentState(VersionKey) ?: 0L
+            val data = remember(version) { loadMiami(context) }
+            val avatars = remember(version) { data.channels.associate { it.name to avatar(context, it, 96, grayWhenOffline = false) } }
+            val locked = remember(version) { widgetLocked(context) }
+            val refreshing = remember(version) { widgetRefreshing(context) }
+            MiamiContent(data, avatars, locked, refreshing)
+        }
     }
 }
 
 @Composable
-private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked: Boolean) {
+private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked: Boolean, refreshing: Boolean) {
     val live = data.channels.count { it.live != null }
     val joined = data.channels.count { it.live != null && it.joined }
     Column(GlanceModifier.fillMaxSize().background(ImageProvider(R.drawable.widget_bg))) {
@@ -202,14 +247,14 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                 // sans ajouter de ligne à l'en-tête : la liste déborderait et une barre de défilement apparaîtrait
                 Column(GlanceModifier.padding(horizontal = 6.dp).clickable(actionRunCallback<RefreshAction>()),
                     horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⟳", style = TextStyle(color = textColor, fontSize = 18.sp))
+                    Text("⟳", style = TextStyle(color = if (refreshing) pinkColor else textColor, fontSize = 18.sp))
                     data.updatedAt?.let {
                         Text(if (data.stale) "⚠ ${clockLabel(it)}" else clockLabel(it), maxLines = 1,
                             style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 9.sp))
                     }
                 }
                 Text(if (locked) "🔒" else "🔓", modifier = GlanceModifier.padding(8.dp)
-                    .clickable(actionRunCallback<ToggleLockAction>(actionParametersOf(LockKey to !locked))),
+                    .clickable(actionRunCallback<ToggleLockAction>()),
                     style = TextStyle(color = if (locked) pinkColor else mutedColor, fontSize = 16.sp))
                 val palm = GlanceModifier.padding(8.dp)
                 Text("🌴", modifier = if (locked) palm
@@ -289,9 +334,10 @@ class MiamiWidgetReceiver : GlanceAppWidgetReceiver() {
 
 class MiamiCompactWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = loadMiami(context)
-        val avatars = data.channels.take(6).map { it to avatar(context, it, 84, grayWhenOffline = true) }
         provideContent {
+            val version = currentState(VersionKey) ?: 0L
+            val data = remember(version) { loadMiami(context) }
+            val avatars = remember(version) { data.channels.take(6).map { it to avatar(context, it, 84, grayWhenOffline = true) } }
             val live = data.channels.count { it.live != null }
             Row(
                 GlanceModifier.fillMaxSize().background(ImageProvider(R.drawable.widget_bg)).padding(horizontal = 12.dp)
@@ -326,13 +372,12 @@ class MiamiCompactReceiver : GlanceAppWidgetReceiver() {
 // --- Actions des widgets ---
 
 private val MiamiOnKey = ActionParameters.Key<Boolean>("miami")
-private val LockKey = ActionParameters.Key<Boolean>("locked")
 
 class ToggleLockAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val locked = parameters[LockKey] ?: return
-        deckPrefs(context).edit().putBoolean(LOCK_PREF, locked).apply()
-        refreshWidgets(context)
+        // Inverse l'état enregistré, pas celui affiché (qui peut avoir un temps de retard)
+        deckPrefs(context).edit().putBoolean(LOCK_PREF, !widgetLocked(context)).apply()
+        renderWidgets(context)
     }
 }
 
@@ -340,20 +385,16 @@ class ToggleChatAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val name = parameters[NameKey] ?: return
         val on = parameters[ToggleableStateKey] ?: return
-        if (widgetLocked(context)) return refreshWidgets(context)
-        runCatching {
-            Api(deckPrefs(context)).call(if (on) "/channels/join" else "/channels/part", JSONObject().put("channels", JSONArray().put(name)))
-        }
-        refreshWidgets(context)
+        if (widgetLocked(context)) return renderWidgets(context)
+        WidgetWorker.command(context, if (on) "/channels/join" else "/channels/part", JSONObject().put("channels", JSONArray().put(name)))
     }
 }
 
 class ToggleMiamiAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val on = parameters[MiamiOnKey] ?: return
-        if (widgetLocked(context)) return refreshWidgets(context)
-        runCatching { Api(deckPrefs(context)).call("/settings", JSONObject().put("miamiMode", on)) }
-        refreshWidgets(context)
+        if (widgetLocked(context)) return renderWidgets(context)
+        WidgetWorker.command(context, "/settings", JSONObject().put("miamiMode", on))
     }
 }
 
@@ -361,18 +402,37 @@ class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) = refreshWidgets(context)
 }
 
-/** Rafraîchissement de fond toutes les 15 minutes (le minimum autorisé par Android). */
+/**
+ * Téléchargement des données des widgets, toujours dans une tâche qui demande le réseau (seul moyen d'y
+ * avoir accès en arrière-plan) : toutes les 15 min, à la demande (⟳, alerte reçue) et pour les actions
+ * des widgets (interrupteur d'un chat, palmier), qui passent par ici pour la même raison.
+ */
 class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val prefs = deckPrefs(applicationContext)
-        val before = prefs.getLong(CACHE_TIME_PREF, 0)
-        refreshWidgets(applicationContext)
-        // Serveur toujours injoignable (cache pas mis à jour) : Android relancera plus tard, avec un délai croissant
-        val ok = prefs.getLong(CACHE_TIME_PREF, 0) != before || Api(prefs).token == null
+        val ctx = applicationContext
+        val prefs = deckPrefs(ctx)
+        inputData.getString(KEY_PATH)?.let { path ->
+            runCatching { Api(prefs).call(path, inputData.getString(KEY_BODY)?.let(::JSONObject)) }
+        }
+        val ok = Api(prefs).token == null || fetchWidgetData(ctx)
+        prefs.edit().putBoolean(REFRESHING_PREF, false).apply()
+        renderWidgets(ctx)
+        // Serveur injoignable : Android relancera plus tard, avec un délai croissant
         return if (ok || runAttemptCount >= 5) Result.success() else Result.retry()
     }
 
+    /** Avant Android 12, une tâche prioritaire tourne comme service de premier plan : il lui faut une notification. */
+    override suspend fun getForegroundInfo(): ForegroundInfo = ForegroundInfo(
+        0x77696467,
+        NotificationCompat.Builder(applicationContext, CHANNEL_QUIET).setSmallIcon(R.drawable.ic_stat_deck)
+            .setContentTitle("Mise à jour du widget").setSilent(true).build(),
+    )
+
     companion object {
+        private const val KEY_PATH = "path"
+        private const val KEY_BODY = "body"
+        private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "widgets", ExistingPeriodicWorkPolicy.KEEP,
@@ -380,14 +440,20 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             )
         }
 
-        /** Après un échec réseau : un rafraîchissement unique, lancé par Android dès que le réseau revient. */
-        fun retryWhenOnline(context: Context) {
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "widgets-retry", ExistingWorkPolicy.KEEP,
-                OneTimeWorkRequestBuilder<WidgetWorker>().setConstraints(online).build(),
-            )
+        private fun request(data: Data = Data.EMPTY) = OneTimeWorkRequestBuilder<WidgetWorker>()
+            .setConstraints(online).setInputData(data)
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
+
+        /** Rafraîchissement immédiat (ou dès que le réseau revient) ; une nouvelle demande remplace l'ancienne. */
+        fun runNow(context: Context) {
+            WorkManager.getInstance(context).enqueueUniqueWork("widgets-now", ExistingWorkPolicy.REPLACE, request())
         }
 
-        private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        /** Action d'un widget envoyée au serveur, puis rafraîchissement. */
+        suspend fun command(context: Context, path: String, body: JSONObject) {
+            deckPrefs(context).edit().putBoolean(REFRESHING_PREF, true).apply()
+            renderWidgets(context)
+            WorkManager.getInstance(context).enqueue(request(workDataOf(KEY_PATH to path, KEY_BODY to body.toString())))
+        }
     }
 }
