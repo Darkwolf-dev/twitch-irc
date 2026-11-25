@@ -67,8 +67,11 @@ import java.util.concurrent.TimeUnit
 
 // --- Données du widget : les chaînes du groupe miami ---
 
-/** staleSince : heure (ms) du dernier état reçu quand le serveur est injoignable et qu'on affiche le cache. */
-private data class MiamiData(val channels: List<Channel>, val miamiMode: Boolean, val error: String?, val staleSince: Long? = null)
+/** updatedAt : heure (ms) de l'état affiché ; stale : serveur injoignable, c'est le dernier état gardé en cache. */
+private data class MiamiData(
+    val channels: List<Channel>, val miamiMode: Boolean, val error: String?,
+    val updatedAt: Long? = null, val stale: Boolean = false,
+)
 
 // Dernier /status reçu : téléphone verrouillé, Android coupe le réseau (mode veille) et les
 // rafraîchissements de fond échouent ; on garde alors la dernière liste au lieu d'afficher l'erreur.
@@ -83,20 +86,22 @@ private suspend fun loadMiami(context: Context): MiamiData {
     val api = Api(deckPrefs(context))
     if (api.token == null) return MiamiData(emptyList(), false, "Ouvre l'appli pour la jumeler")
     val prefs = deckPrefs(context)
-    var staleSince: Long? = null
+    var updatedAt = System.currentTimeMillis()
+    var stale = false
     return try {
         val json = try {
-            api.call("/status").also { prefs.edit().putString(CACHE_PREF, it.toString()).putLong(CACHE_TIME_PREF, System.currentTimeMillis()).apply() }
+            api.call("/status").also { prefs.edit().putString(CACHE_PREF, it.toString()).putLong(CACHE_TIME_PREF, updatedAt).apply() }
         } catch (e: Exception) {
             WidgetWorker.retryWhenOnline(context)
             val cached = prefs.getString(CACHE_PREF, null) ?: throw e
-            staleSince = prefs.getLong(CACHE_TIME_PREF, 0)
+            updatedAt = prefs.getLong(CACHE_TIME_PREF, 0)
+            stale = true
             JSONObject(cached)
         }
         val status = parseStatus(json)
         val miami = status.channels.filter { it.miami }
             .sortedWith(compareByDescending<Channel> { it.live != null }.thenByDescending { it.live?.viewers ?: -1 }.thenBy { it.name })
-        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null, staleSince)
+        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null, updatedAt, stale)
     } catch (e: Exception) {
         MiamiData(emptyList(), false, e.message ?: "Serveur injoignable")
     }
@@ -137,9 +142,16 @@ private suspend fun avatar(context: Context, c: Channel, sizePx: Int, grayWhenOf
     out
 }
 
-private fun staleLabel(t: Long): String {
-    val min = (System.currentTimeMillis() - t) / 60_000
-    return if (min < 1) "moins d'1 min" else if (min < 60) "$min min" else "${min / 60} h"
+/** Heure de mise à jour : « 14:32 », « hier 22:10 » ou « 23/11 22:10 ». */
+private fun clockLabel(t: Long): String {
+    val day = { ms: Long -> java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalDate() }
+    val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.FRANCE).format(java.util.Date(t))
+    val today = java.time.LocalDate.now()
+    return when (day(t)) {
+        today -> time
+        today.minusDays(1) -> "hier $time"
+        else -> java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.FRANCE).format(java.util.Date(t))
+    }
 }
 
 /** Rafraîchit tous les widgets (après une action, une alerte reçue, ou toutes les 15 min). */
@@ -185,9 +197,9 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                         data.error ?: "$live en live · $joined chat${if (joined > 1) "s" else ""} connecté${if (joined > 1) "s" else ""}",
                         style = TextStyle(color = mutedColor, fontSize = 11.sp),
                     )
-                    data.staleSince?.let {
-                        Text("hors ligne · état d'il y a ${staleLabel(it)}", maxLines = 1,
-                            style = TextStyle(color = amberColor, fontSize = 10.sp))
+                    data.updatedAt?.let {
+                        Text(if (data.stale) "hors ligne · màj ${clockLabel(it)}" else "màj ${clockLabel(it)}", maxLines = 1,
+                            style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 10.sp))
                     }
                 }
                 Text("⟳", modifier = GlanceModifier.padding(8.dp).clickable(actionRunCallback<RefreshAction>()),
@@ -290,8 +302,14 @@ class MiamiCompactWidget : GlanceAppWidget() {
                         Spacer(GlanceModifier.width(5.dp))
                     }
                 }
-                Text(data.error?.let { "!" } ?: "$live / ${data.channels.size} en live${if (data.staleSince != null) " ·⚠" else ""}",
-                    style = TextStyle(color = mutedColor, fontSize = 11.sp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(data.error?.let { "!" } ?: "$live / ${data.channels.size} en live",
+                        style = TextStyle(color = mutedColor, fontSize = 11.sp))
+                    data.updatedAt?.let {
+                        Text(if (data.stale) "⚠ ${clockLabel(it)}" else clockLabel(it), maxLines = 1,
+                            style = TextStyle(color = if (data.stale) amberColor else mutedColor, fontSize = 9.sp))
+                    }
+                }
             }
         }
     }
