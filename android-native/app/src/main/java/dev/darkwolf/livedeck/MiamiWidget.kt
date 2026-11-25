@@ -387,7 +387,10 @@ class ToggleChatAction : ActionCallback {
         val name = parameters[NameKey] ?: return
         val on = parameters[ToggleableStateKey] ?: return
         if (widgetLocked(context)) return renderWidgets(context)
-        WidgetWorker.command(context, if (on) "/channels/join" else "/channels/part", JSONObject().put("channels", JSONArray().put(name)))
+        WidgetWorker.command(context, if (on) "/channels/join" else "/channels/part", JSONObject().put("channels", JSONArray().put(name))) { status ->
+            val arr = status.optJSONArray("channels") ?: return@command
+            for (i in 0 until arr.length()) arr.optJSONObject(i)?.takeIf { it.optString("name") == name }?.put("enabled", on)
+        }
     }
 }
 
@@ -395,7 +398,9 @@ class ToggleMiamiAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val on = parameters[MiamiOnKey] ?: return
         if (widgetLocked(context)) return renderWidgets(context)
-        WidgetWorker.command(context, "/settings", JSONObject().put("miamiMode", on))
+        WidgetWorker.command(context, "/settings", JSONObject().put("miamiMode", on)) { status ->
+            (status.optJSONObject("settings") ?: JSONObject().also { status.put("settings", it) }).put("miamiMode", on)
+        }
     }
 }
 
@@ -450,9 +455,18 @@ class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             WorkManager.getInstance(context).enqueueUniqueWork("widgets-now", ExistingWorkPolicy.REPLACE, request())
         }
 
-        /** Action d'un widget envoyée au serveur, puis rafraîchissement. */
-        suspend fun command(context: Context, path: String, body: JSONObject) {
-            deckPrefs(context).edit().putBoolean(REFRESHING_PREF, true).apply()
+        /**
+         * Action d'un widget envoyée au serveur, puis rafraîchissement. [patch] applique tout de suite le
+         * changement au cache : sans ça, le widget redessiné en attendant le serveur remettrait l'interrupteur
+         * dans l'ancien état avant de revenir au nouveau.
+         */
+        suspend fun command(context: Context, path: String, body: JSONObject, patch: (JSONObject) -> Unit) {
+            val prefs = deckPrefs(context)
+            prefs.getString(CACHE_PREF, null)?.let { cached ->
+                runCatching { JSONObject(cached).also(patch) }.getOrNull()
+                    ?.let { prefs.edit().putString(CACHE_PREF, it.toString()).apply() }
+            }
+            prefs.edit().putBoolean(REFRESHING_PREF, true).apply()
             renderWidgets(context)
             WorkManager.getInstance(context).enqueue(request(workDataOf(KEY_PATH to path, KEY_BODY to body.toString())))
         }
