@@ -1,5 +1,8 @@
 FROM node:26-alpine
 
+# Correctifs de sécurité Alpine (OpenSSL, zlib…) parus après l'image de base
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
