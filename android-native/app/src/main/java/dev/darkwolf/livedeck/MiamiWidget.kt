@@ -49,7 +49,11 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.work.CoroutineWorker
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -63,7 +67,13 @@ import java.util.concurrent.TimeUnit
 
 // --- Données du widget : les chaînes du groupe miami ---
 
-private data class MiamiData(val channels: List<Channel>, val miamiMode: Boolean, val error: String?)
+/** staleSince : heure (ms) du dernier état reçu quand le serveur est injoignable et qu'on affiche le cache. */
+private data class MiamiData(val channels: List<Channel>, val miamiMode: Boolean, val error: String?, val staleSince: Long? = null)
+
+// Dernier /status reçu : téléphone verrouillé, Android coupe le réseau (mode veille) et les
+// rafraîchissements de fond échouent ; on garde alors la dernière liste au lieu d'afficher l'erreur.
+private const val CACHE_PREF = "widgetStatus"
+private const val CACHE_TIME_PREF = "widgetStatusTime"
 
 /** Verrou du grand widget : interrupteurs et palmier figés pour éviter les fausses manips. */
 private const val LOCK_PREF = "widgetLocked"
@@ -72,11 +82,21 @@ private fun widgetLocked(context: Context) = deckPrefs(context).getBoolean(LOCK_
 private suspend fun loadMiami(context: Context): MiamiData {
     val api = Api(deckPrefs(context))
     if (api.token == null) return MiamiData(emptyList(), false, "Ouvre l'appli pour la jumeler")
+    val prefs = deckPrefs(context)
+    var staleSince: Long? = null
     return try {
-        val status = parseStatus(api.call("/status"))
+        val json = try {
+            api.call("/status").also { prefs.edit().putString(CACHE_PREF, it.toString()).putLong(CACHE_TIME_PREF, System.currentTimeMillis()).apply() }
+        } catch (e: Exception) {
+            WidgetWorker.retryWhenOnline(context)
+            val cached = prefs.getString(CACHE_PREF, null) ?: throw e
+            staleSince = prefs.getLong(CACHE_TIME_PREF, 0)
+            JSONObject(cached)
+        }
+        val status = parseStatus(json)
         val miami = status.channels.filter { it.miami }
             .sortedWith(compareByDescending<Channel> { it.live != null }.thenByDescending { it.live?.viewers ?: -1 }.thenBy { it.name })
-        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null)
+        MiamiData(miami, status.miamiMode, if (miami.isEmpty()) "Aucune chaîne dans le groupe miami" else null, staleSince)
     } catch (e: Exception) {
         MiamiData(emptyList(), false, e.message ?: "Serveur injoignable")
     }
@@ -115,6 +135,11 @@ private suspend fun avatar(context: Context, c: Channel, sizePx: Int, grayWhenOf
     }
     canvas.drawCircle(r, r, inner, shader)
     out
+}
+
+private fun staleLabel(t: Long): String {
+    val min = (System.currentTimeMillis() - t) / 60_000
+    return if (min < 1) "moins d'1 min" else if (min < 60) "$min min" else "${min / 60} h"
 }
 
 /** Rafraîchit tous les widgets (après une action, une alerte reçue, ou toutes les 15 min). */
@@ -160,6 +185,10 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked:
                         data.error ?: "$live en live · $joined chat${if (joined > 1) "s" else ""} connecté${if (joined > 1) "s" else ""}",
                         style = TextStyle(color = mutedColor, fontSize = 11.sp),
                     )
+                    data.staleSince?.let {
+                        Text("hors ligne · état d'il y a ${staleLabel(it)}", maxLines = 1,
+                            style = TextStyle(color = amberColor, fontSize = 10.sp))
+                    }
                 }
                 Text("⟳", modifier = GlanceModifier.padding(8.dp).clickable(actionRunCallback<RefreshAction>()),
                     style = TextStyle(color = textColor, fontSize = 18.sp))
@@ -261,7 +290,7 @@ class MiamiCompactWidget : GlanceAppWidget() {
                         Spacer(GlanceModifier.width(5.dp))
                     }
                 }
-                Text(data.error?.let { "!" } ?: "$live / ${data.channels.size} en live",
+                Text(data.error?.let { "!" } ?: "$live / ${data.channels.size} en live${if (data.staleSince != null) " ·⚠" else ""}",
                     style = TextStyle(color = mutedColor, fontSize = 11.sp))
             }
         }
@@ -313,16 +342,30 @@ class RefreshAction : ActionCallback {
 /** Rafraîchissement de fond toutes les 15 minutes (le minimum autorisé par Android). */
 class WidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        val prefs = deckPrefs(applicationContext)
+        val before = prefs.getLong(CACHE_TIME_PREF, 0)
         refreshWidgets(applicationContext)
-        return Result.success()
+        // Serveur toujours injoignable (cache pas mis à jour) : Android relancera plus tard, avec un délai croissant
+        val ok = prefs.getLong(CACHE_TIME_PREF, 0) != before || Api(prefs).token == null
+        return if (ok || runAttemptCount >= 5) Result.success() else Result.retry()
     }
 
     companion object {
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "widgets", ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<WidgetWorker>(15, TimeUnit.MINUTES).build(),
+                PeriodicWorkRequestBuilder<WidgetWorker>(15, TimeUnit.MINUTES).setConstraints(online).build(),
             )
         }
+
+        /** Après un échec réseau : un rafraîchissement unique, lancé par Android dès que le réseau revient. */
+        fun retryWhenOnline(context: Context) {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "widgets-retry", ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<WidgetWorker>().setConstraints(online).build(),
+            )
+        }
+
+        private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     }
 }
