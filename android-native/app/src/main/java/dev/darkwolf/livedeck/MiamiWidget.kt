@@ -65,6 +65,10 @@ import java.util.concurrent.TimeUnit
 
 private data class MiamiData(val channels: List<Channel>, val miamiMode: Boolean, val error: String?)
 
+/** Verrou du grand widget : interrupteurs et palmier figés pour éviter les fausses manips. */
+private const val LOCK_PREF = "widgetLocked"
+private fun widgetLocked(context: Context) = deckPrefs(context).getBoolean(LOCK_PREF, false)
+
 private suspend fun loadMiami(context: Context): MiamiData {
     val api = Api(deckPrefs(context))
     if (api.token == null) return MiamiData(emptyList(), false, "Ouvre l'appli pour la jumeler")
@@ -137,12 +141,13 @@ class MiamiWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = loadMiami(context)
         val avatars = data.channels.associate { it.name to avatar(context, it, 96, grayWhenOffline = false) }
-        provideContent { MiamiContent(data, avatars) }
+        val locked = widgetLocked(context)
+        provideContent { MiamiContent(data, avatars, locked) }
     }
 }
 
 @Composable
-private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>) {
+private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>, locked: Boolean) {
     val live = data.channels.count { it.live != null }
     val joined = data.channels.count { it.live != null && it.joined }
     Column(GlanceModifier.fillMaxSize().background(ImageProvider(R.drawable.widget_bg))) {
@@ -158,20 +163,24 @@ private fun MiamiContent(data: MiamiData, avatars: Map<String, Bitmap?>) {
                 }
                 Text("⟳", modifier = GlanceModifier.padding(8.dp).clickable(actionRunCallback<RefreshAction>()),
                     style = TextStyle(color = textColor, fontSize = 18.sp))
-                Text("🌴", modifier = GlanceModifier.padding(8.dp)
-                    .clickable(actionRunCallback<ToggleMiamiAction>(actionParametersOf(MiamiOnKey to !data.miamiMode))),
+                Text(if (locked) "🔒" else "🔓", modifier = GlanceModifier.padding(8.dp)
+                    .clickable(actionRunCallback<ToggleLockAction>(actionParametersOf(LockKey to !locked))),
+                    style = TextStyle(color = if (locked) pinkColor else mutedColor, fontSize = 16.sp))
+                val palm = GlanceModifier.padding(8.dp)
+                Text("🌴", modifier = if (locked) palm
+                    else palm.clickable(actionRunCallback<ToggleMiamiAction>(actionParametersOf(MiamiOnKey to !data.miamiMode))),
                     style = TextStyle(fontSize = 18.sp, color = if (data.miamiMode) pinkColor else mutedColor))
             }
             Spacer(GlanceModifier.height(4.dp))
             LazyColumn(GlanceModifier.fillMaxSize()) {
-                items(data.channels, itemId = { it.name.hashCode().toLong() }) { c -> ChannelLine(c, avatars[c.name]) }
+                items(data.channels, itemId = { it.name.hashCode().toLong() }) { c -> ChannelLine(c, avatars[c.name], locked) }
             }
         }
     }
 }
 
 @Composable
-private fun ChannelLine(c: Channel, avatar: Bitmap?) {
+private fun ChannelLine(c: Channel, avatar: Bitmap?, locked: Boolean) {
     Row(
         GlanceModifier.fillMaxWidth().padding(vertical = 5.dp)
             .clickable(actionStartActivity<MainActivity>(actionParametersOf(ChannelExtra to c.name))),
@@ -211,7 +220,10 @@ private fun ChannelLine(c: Channel, avatar: Bitmap?) {
                 }
             }
         }
-        Switch(
+        // Verrouillé : un interrupteur dessiné, sans action (un Switch sans action basculerait quand même à l'écran)
+        if (locked) Box(GlanceModifier.size(width = 38.dp, height = 22.dp)
+            .background(ImageProvider(if (c.enabled) R.drawable.widget_switch_on else R.drawable.widget_switch_off))) {}
+        else Switch(
             checked = c.enabled,
             onCheckedChange = actionRunCallback<ToggleChatAction>(actionParametersOf(NameKey to c.name)),
             colors = SwitchDefaults.colors(
@@ -263,11 +275,21 @@ class MiamiCompactReceiver : GlanceAppWidgetReceiver() {
 // --- Actions des widgets ---
 
 private val MiamiOnKey = ActionParameters.Key<Boolean>("miami")
+private val LockKey = ActionParameters.Key<Boolean>("locked")
+
+class ToggleLockAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val locked = parameters[LockKey] ?: return
+        deckPrefs(context).edit().putBoolean(LOCK_PREF, locked).apply()
+        refreshWidgets(context)
+    }
+}
 
 class ToggleChatAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val name = parameters[NameKey] ?: return
         val on = parameters[ToggleableStateKey] ?: return
+        if (widgetLocked(context)) return refreshWidgets(context)
         runCatching {
             Api(deckPrefs(context)).call(if (on) "/channels/join" else "/channels/part", JSONObject().put("channels", JSONArray().put(name)))
         }
@@ -278,6 +300,7 @@ class ToggleChatAction : ActionCallback {
 class ToggleMiamiAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val on = parameters[MiamiOnKey] ?: return
+        if (widgetLocked(context)) return refreshWidgets(context)
         runCatching { Api(deckPrefs(context)).call("/settings", JSONObject().put("miamiMode", on)) }
         refreshWidgets(context)
     }
